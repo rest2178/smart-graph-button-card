@@ -14,7 +14,7 @@ import { ACTIONS, DEFAULT_HOLD_TIME, DEFAULT_DOUBLE_TAP_WINDOW, isToggleableDoma
 import { VALUE_TYPES, VALUE_FORMATS } from "./value-formatter.js";
 import { MIN_UPDATE_INTERVAL } from "./history-provider.js";
 
-export const GRAPH_POSITIONS = ["full", "left", "right", "bottom", "icon-area", "custom"];
+export const GRAPH_POSITIONS = ["full", "after-icon", "left", "right", "bottom", "icon-area", "custom"];
 export const COLOR_MODES = ["fixed", "state", "thresholds", "gradient", "sign"];
 export const THRESHOLD_MODES = ["current", "per-point"];
 export const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
@@ -89,6 +89,7 @@ export const DEFAULTS = Object.freeze({
     width: "50%",
     height: "35%",
     bounds: { left: "0%", top: "0%", width: "100%", height: "100%" },
+    icon_offset: "0px",
     hours_to_show: 24,
     max_points: 60,
     aggregation: "average",
@@ -503,6 +504,7 @@ function normalizeGraph(rawGraph, c, err) {
   g.fade_end = fadeLength(g.fade_end ?? g.fade, "graph.fade_end", err);
   g.width = cssLen(g.width, "graph.width", err);
   g.height = cssLen(g.height, "graph.height", err);
+  g.icon_offset = cssLen(g.icon_offset, "graph.icon_offset", err);
   if (g.position === "custom") {
     if (!isPlainObject(g.bounds)) err("graph.bounds muss bei position: custom angegeben werden (left, top, width, height).");
     else for (const k of ["left", "top", "width", "height"]) g.bounds[k] = cssLen(g.bounds[k], `graph.bounds.${k}`, err);

@@ -56,6 +56,21 @@ ha-card.sgbc.auto-height { height: auto; min-height: 48px; }
 .graph svg, .icon-graph svg { display: block; width: 100%; height: 100%; overflow: hidden; }
 .graph.pos-full { inset: 0; }
 .graph.pos-left { inset: 0 auto 0 0; width: var(--sgbc-graph-width, 50%); border-radius: inherit; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.graph.pos-after-icon {
+  inset: 0 0 0 auto;
+  left: calc(var(--sgbc-graph-pad, 12px) + var(--sgbc-icon-area-size, 42px) + var(--sgbc-graph-icon-offset, 0px));
+  border-radius: inherit;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.graph.pos-after-icon.mirror {
+  inset: 0 auto 0 0;
+  left: 0;
+  right: calc(var(--sgbc-graph-pad, 12px) + var(--sgbc-icon-area-size, 42px) + var(--sgbc-graph-icon-offset, 0px));
+  border-radius: inherit;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
 .graph.pos-right { inset: 0 0 0 auto; width: var(--sgbc-graph-width, 50%); border-radius: inherit; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .graph.pos-bottom { inset: auto 0 0 0; height: var(--sgbc-graph-height, 35%); border-top-left-radius: 0; border-top-right-radius: 0; }
 .graph.pos-custom {

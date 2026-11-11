@@ -23,6 +23,7 @@ const GRAPH_TYPES = [
 ];
 const GRAPH_POSITIONS = [
   ["full", "Ganze Karte"],
+  ["after-icon", "Nach dem Symbol"],
   ["left", "Links"],
   ["right", "Rechts"],
   ["bottom", "Unten"],

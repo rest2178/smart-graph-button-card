@@ -54,7 +54,7 @@ Eine kompakte, frei parametrierbare **Button-Karte für Home Assistant** mit Sym
 - Name aus der Konfiguration, aus `friendly_name`, aus einem Attribut oder aus einem sicheren Template
 - Zwei Werte, nebeneinander (`inline`) oder untereinander (`stacked`): State, Attribut, Text, Name, `last_changed`, `last_updated`, Template, Formatierungsfunktionen
 - Graph mit `line`, `area`, `smooth-area`, `bar`, `column`, `stepped`, `line-bar`, `smooth-line-bar` in nativem SVG
-- Graphpositionen `full`, `left`, `right`, `bottom`, `icon-area`, `custom`
+- Graphpositionen `full`, `after-icon`, `left`, `right`, `bottom`, `icon-area`, `custom`
 - Farbmodi `fixed`, `state`, `thresholds` (beliebig viele Grenzwerte, `current` oder `per-point`), `gradient`, `sign` (über/unter null)
 - Statusabhängiger Kartenhintergrund, Lesbarkeits-Overlay, Ebenenreihenfolge einstellbar
 - Eigene Zustandsregeln mit `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `regex`
@@ -280,10 +280,11 @@ value_2:
 | `entity` | Haupt-Entity | Numerischer Sensor |
 | `attribute` | – | Attribut statt State darstellen |
 | `type` | `line` | siehe [Grapharten](#grapharten) |
-| `position` | `full` | siehe [Graphpositionen](#graphpositionen) |
+| `position` | `full` | `full`, `after-icon`, `left`, `right`, `bottom`, `icon-area`, `custom`, siehe [Graphpositionen](#graphpositionen) |
 | `width` | `50%` | Breite bei `left`/`right` |
 | `height` | `35%` | Höhe bei `bottom` |
 | `bounds` | `0%/0%/100%/100%` | `left`, `top`, `width`, `height` bei `custom` |
+| `icon_offset` | `0px` | Abstand zwischen Symbol und Graph bei `after-icon` (auch negativ möglich) |
 | `hours_to_show` | `24` | Zeitraum in Stunden (> 0, ≤ 8760) |
 | `max_points` | `60` | Anzahl Zeitfenster bzw. Balken (2–1000) |
 | `aggregation` | `average` | `average` (zeitgewichtet), `min`, `max`, `last`, `sum` |
@@ -402,6 +403,7 @@ Skalierung: automatisch oder manuell (`min`/`max`). Bei konstanten Werten wird s
 | Position | Bedeutung |
 | --- | --- |
 | `full` | Gesamter Kartenhintergrund |
+| `after-icon` | Beginnt direkt nach dem Symbol und reicht bis zum Kartenrand. Bei `icon_area.position: right` gespiegelt (vom linken Rand bis vor das Symbol). Abstand zum Symbol über `icon_offset`. Ohne Symbolbereich wie `full` |
 | `left` | Linker Anteil, Breite über `width` |
 | `right` | Rechter Anteil, Breite über `width` |
 | `bottom` | Streifen unten, Höhe über `height` |

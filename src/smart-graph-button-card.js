@@ -13,7 +13,7 @@ import { fetchHistory } from "./history-provider.js";
 import { reduceSeries, appendPoint } from "./data-reducer.js";
 import { renderGraphSVG } from "./graph-renderer.js";
 import { GestureRecognizer, bindActionHandler, handleAction, hasAction } from "./action-handler.js";
-import { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx } from "./utils.js";
+import { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx, paddingSide } from "./utils.js";
 import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
 
 export const CARD_TAG = "smart-graph-button-card";
@@ -361,7 +361,9 @@ export class SmartGraphButtonCard extends HTMLElement {
 
     const card = el("ha-card", "sgbc", { tabindex: "0", role: "button" });
     const stateBg = el("div", "layer state-bg");
-    const graph = el("div", `layer graph pos-${c.graph.position}${c.graph.enabled ? "" : " hidden"}`);
+    // "after-icon" without an icon area is the same as "full"
+    const graphPos = c.graph.position === "after-icon" && !c.icon_area.enabled ? "full" : c.graph.position;
+    const graph = el("div", `layer graph pos-${graphPos}${c.icon_area.position === "right" ? " mirror" : ""}${c.graph.enabled ? "" : " hidden"}`);
     const overlay = el("div", `layer overlay${c.layers.overlay.enabled ? "" : " hidden"}`);
     const content = el("div", "content");
     const effects = el("div", "layer effects");
@@ -455,6 +457,12 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (userSet(raw, "graph.opacity")) setVar("--sgbc-graph-opacity", c.graph.opacity);
     if (c.graph.position === "left" || c.graph.position === "right") setVar("--sgbc-graph-width", c.graph.width);
     if (c.graph.position === "bottom") setVar("--sgbc-graph-height", c.graph.height);
+    if (graphPos === "after-icon") {
+      // graph starts where the icon area ends: padding + icon size + offset
+      const side = c.icon_area.position === "right" ? "right" : "left";
+      setVar("--sgbc-graph-pad", paddingSide(c.layout.padding, side));
+      setVar("--sgbc-graph-icon-offset", c.graph.icon_offset);
+    }
     if (parseFloat(c.graph.fade_start) > 0 || parseFloat(c.graph.fade_end) > 0) {
       graph.classList.add("fade");
       if (iconGraph) iconGraph.classList.add("fade");

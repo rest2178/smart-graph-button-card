@@ -60,6 +60,21 @@ ha-card.sgbc.auto-height { height: auto; min-height: 48px; }
 .graph svg, .icon-graph svg { display: block; width: 100%; height: 100%; overflow: hidden; }
 .graph.pos-full { inset: 0; }
 .graph.pos-left { inset: 0 auto 0 0; width: var(--sgbc-graph-width, 50%); border-radius: inherit; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.graph.pos-after-icon {
+  inset: 0 0 0 auto;
+  left: calc(var(--sgbc-graph-pad, 12px) + var(--sgbc-icon-area-size, 42px) + var(--sgbc-graph-icon-offset, 0px));
+  border-radius: inherit;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.graph.pos-after-icon.mirror {
+  inset: 0 auto 0 0;
+  left: 0;
+  right: calc(var(--sgbc-graph-pad, 12px) + var(--sgbc-icon-area-size, 42px) + var(--sgbc-graph-icon-offset, 0px));
+  border-radius: inherit;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
 .graph.pos-right { inset: 0 0 0 auto; width: var(--sgbc-graph-width, 50%); border-radius: inherit; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .graph.pos-bottom { inset: auto 0 0 0; height: var(--sgbc-graph-height, 35%); border-top-left-radius: 0; border-top-right-radius: 0; }
 .graph.pos-custom {
@@ -325,6 +340,19 @@ function toCssBoxLength(value) {
   return out.every(Boolean) ? out.join(" ") : null;
 }
 
+/**
+ * Left/right part of a CSS padding shorthand ("8px 12px" -> right "12px",
+ * left "12px"). Function values (var/calc) are returned unchanged.
+ */
+function paddingSide(padding, side) {
+  if (typeof padding !== "string" || padding.trim() === "") return "0px";
+  const s = padding.trim();
+  if (s.includes("(")) return s;
+  const p = s.split(/\s+/);
+  if (side === "left") return p[3] ?? p[1] ?? p[0];
+  return p[1] ?? p[0];
+}
+
 /** Parse a CSS length in px (only px or unitless). Returns null otherwise. */
 function cssLengthToPx(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -372,7 +400,7 @@ function mergeDeep(base, override) {
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
-return { parseNumber, isDisplayable, escapeHtml, toCssLength, toCssBoxLength, cssLengthToPx, isSafeCssValue, isPlainObject, deepClone, mergeDeep, clamp };
+return { parseNumber, isDisplayable, escapeHtml, toCssLength, toCssBoxLength, paddingSide, cssLengthToPx, isSafeCssValue, isPlainObject, deepClone, mergeDeep, clamp };
 })();
 
 // ---- src/state-resolver.js
@@ -2010,7 +2038,7 @@ const { ACTIONS, DEFAULT_HOLD_TIME, DEFAULT_DOUBLE_TAP_WINDOW, isToggleableDomai
 const { VALUE_TYPES, VALUE_FORMATS } = __m_value_formatter_js;
 const { MIN_UPDATE_INTERVAL } = __m_history_provider_js;
 
-const GRAPH_POSITIONS = ["full", "left", "right", "bottom", "icon-area", "custom"];
+const GRAPH_POSITIONS = ["full", "after-icon", "left", "right", "bottom", "icon-area", "custom"];
 const COLOR_MODES = ["fixed", "state", "thresholds", "gradient", "sign"];
 const THRESHOLD_MODES = ["current", "per-point"];
 const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
@@ -2085,6 +2113,7 @@ const DEFAULTS = Object.freeze({
     width: "50%",
     height: "35%",
     bounds: { left: "0%", top: "0%", width: "100%", height: "100%" },
+    icon_offset: "0px",
     hours_to_show: 24,
     max_points: 60,
     aggregation: "average",
@@ -2499,6 +2528,7 @@ function normalizeGraph(rawGraph, c, err) {
   g.fade_end = fadeLength(g.fade_end ?? g.fade, "graph.fade_end", err);
   g.width = cssLen(g.width, "graph.width", err);
   g.height = cssLen(g.height, "graph.height", err);
+  g.icon_offset = cssLen(g.icon_offset, "graph.icon_offset", err);
   if (g.position === "custom") {
     if (!isPlainObject(g.bounds)) err("graph.bounds muss bei position: custom angegeben werden (left, top, width, height).");
     else for (const k of ["left", "top", "width", "height"]) g.bounds[k] = cssLen(g.bounds[k], `graph.bounds.${k}`, err);
@@ -2614,6 +2644,7 @@ const GRAPH_TYPES = [
 ];
 const GRAPH_POSITIONS = [
   ["full", "Ganze Karte"],
+  ["after-icon", "Nach dem Symbol"],
   ["left", "Links"],
   ["right", "Rechts"],
   ["bottom", "Unten"],
@@ -3325,7 +3356,7 @@ const { fetchHistory } = __m_history_provider_js;
 const { reduceSeries, appendPoint } = __m_data_reducer_js;
 const { renderGraphSVG } = __m_graph_renderer_js;
 const { GestureRecognizer, bindActionHandler, handleAction, hasAction } = __m_action_handler_js;
-const { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx } = __m_utils_js;
+const { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx, paddingSide } = __m_utils_js;
 const { EDITOR_TAG } = __m_smart_graph_button_card_editor_js;
 
 const CARD_TAG = "smart-graph-button-card";
@@ -3673,7 +3704,9 @@ class SmartGraphButtonCard extends HTMLElement {
 
     const card = el("ha-card", "sgbc", { tabindex: "0", role: "button" });
     const stateBg = el("div", "layer state-bg");
-    const graph = el("div", `layer graph pos-${c.graph.position}${c.graph.enabled ? "" : " hidden"}`);
+    // "after-icon" without an icon area is the same as "full"
+    const graphPos = c.graph.position === "after-icon" && !c.icon_area.enabled ? "full" : c.graph.position;
+    const graph = el("div", `layer graph pos-${graphPos}${c.icon_area.position === "right" ? " mirror" : ""}${c.graph.enabled ? "" : " hidden"}`);
     const overlay = el("div", `layer overlay${c.layers.overlay.enabled ? "" : " hidden"}`);
     const content = el("div", "content");
     const effects = el("div", "layer effects");
@@ -3767,6 +3800,12 @@ class SmartGraphButtonCard extends HTMLElement {
     if (userSet(raw, "graph.opacity")) setVar("--sgbc-graph-opacity", c.graph.opacity);
     if (c.graph.position === "left" || c.graph.position === "right") setVar("--sgbc-graph-width", c.graph.width);
     if (c.graph.position === "bottom") setVar("--sgbc-graph-height", c.graph.height);
+    if (graphPos === "after-icon") {
+      // graph starts where the icon area ends: padding + icon size + offset
+      const side = c.icon_area.position === "right" ? "right" : "left";
+      setVar("--sgbc-graph-pad", paddingSide(c.layout.padding, side));
+      setVar("--sgbc-graph-icon-offset", c.graph.icon_offset);
+    }
     if (parseFloat(c.graph.fade_start) > 0 || parseFloat(c.graph.fade_end) > 0) {
       graph.classList.add("fade");
       if (iconGraph) iconGraph.classList.add("fade");

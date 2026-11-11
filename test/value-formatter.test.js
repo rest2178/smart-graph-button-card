@@ -89,3 +89,12 @@ test("value: attribute, text, name, template, prefix/suffix, thresholds", () => 
   const r = resolveValue({ entity: "climate.x", type: "attribute", attribute: "current_temperature", thresholds: [{ value: 0, color: "blue" }, { value: 20, color: "red" }] }, hass);
   assert.equal(r.color, "red");
 });
+
+test("paddingSide picks the left/right part of a padding shorthand", async () => {
+  const { paddingSide } = await import("../src/utils.js");
+  assert.equal(paddingSide("8px 12px", "left"), "12px");
+  assert.equal(paddingSide("8px", "left"), "8px");
+  assert.equal(paddingSide("1px 2px 3px 4px", "left"), "4px");
+  assert.equal(paddingSide("1px 2px 3px 4px", "right"), "2px");
+  assert.equal(paddingSide("var(--pad)", "left"), "var(--pad)");
+});

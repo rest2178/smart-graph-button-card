@@ -92,3 +92,11 @@ test("text colors: strings and per-state maps, invalid values rejected", () => {
   throwsWith({ ...base, values: { color: "red; background: url(x)" } }, /values\.color/);
   throwsWith({ ...base, value_2: { entity: "sensor.p", color: { on: "<b>" } } }, /value_2\.color\.on/);
 });
+
+test("graph position after-icon with offset", () => {
+  const c = validateConfig({ ...base, graph: { entity: "sensor.p", position: "after-icon", icon_offset: 6 } });
+  assert.equal(c.graph.position, "after-icon");
+  assert.equal(c.graph.icon_offset, "6px");
+  assert.equal(validateConfig({ ...base, graph: { entity: "sensor.p" } }).graph.icon_offset, "0px");
+  throwsWith({ ...base, graph: { entity: "sensor.p", icon_offset: "weit" } }, /icon_offset/);
+});

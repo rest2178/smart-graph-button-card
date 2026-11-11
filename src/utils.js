@@ -63,6 +63,19 @@ export function toCssBoxLength(value) {
   return out.every(Boolean) ? out.join(" ") : null;
 }
 
+/**
+ * Left/right part of a CSS padding shorthand ("8px 12px" -> right "12px",
+ * left "12px"). Function values (var/calc) are returned unchanged.
+ */
+export function paddingSide(padding, side) {
+  if (typeof padding !== "string" || padding.trim() === "") return "0px";
+  const s = padding.trim();
+  if (s.includes("(")) return s;
+  const p = s.split(/\s+/);
+  if (side === "left") return p[3] ?? p[1] ?? p[0];
+  return p[1] ?? p[0];
+}
+
 /** Parse a CSS length in px (only px or unitless). Returns null otherwise. */
 export function cssLengthToPx(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
