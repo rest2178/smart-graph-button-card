@@ -276,6 +276,9 @@ export function validateConfig(raw) {
   c.values.gap = cssLen(c.values.gap, "values.gap", err);
   c.values.font_size = cssLen(c.values.font_size, "values.font_size", err);
   if (typeof c.values.separator !== "string") c.values.separator = String(c.values.separator ?? "");
+  checkColor(raw.name_style?.color, "name_style.color", err);
+  checkColor(raw.values?.color, "values.color", err);
+  for (const key of ["value_1", "value_2"]) if (isPlainObject(raw[key])) checkColor(raw[key].color, `${key}.color`, err);
 
   // ---- graph
   c.graph = normalizeGraph(raw.graph, c, err);
@@ -321,6 +324,20 @@ export function validateConfig(raw) {
 
   if (errors.length) throw new ConfigError(errors);
   return c;
+}
+
+/** A text color: CSS color string, or a map per state/class ({on, off, …}). */
+function checkColor(value, path, err) {
+  if (value === undefined || value === null) return;
+  if (typeof value === "string") {
+    if (!isSafeCssValue(value)) err(`${path} „${value}“ ist keine gültige Farbe.`);
+    return;
+  }
+  if (!isPlainObject(value)) return err(`${path} muss eine Farbe oder eine Zuordnung je Zustand sein (z. B. "on": "#22c55e").`);
+  for (const [k, v] of Object.entries(value)) {
+    if (!isSafeCssValue(String(v))) err(`${path}.${k} „${v}“ ist keine gültige Farbe.`);
+  }
+  return undefined;
 }
 
 function checkEntity(value, path, err) {

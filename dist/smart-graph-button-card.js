@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.2.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.3.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -2272,6 +2272,9 @@ function validateConfig(raw) {
   c.values.gap = cssLen(c.values.gap, "values.gap", err);
   c.values.font_size = cssLen(c.values.font_size, "values.font_size", err);
   if (typeof c.values.separator !== "string") c.values.separator = String(c.values.separator ?? "");
+  checkColor(raw.name_style?.color, "name_style.color", err);
+  checkColor(raw.values?.color, "values.color", err);
+  for (const key of ["value_1", "value_2"]) if (isPlainObject(raw[key])) checkColor(raw[key].color, `${key}.color`, err);
 
   // ---- graph
   c.graph = normalizeGraph(raw.graph, c, err);
@@ -2317,6 +2320,20 @@ function validateConfig(raw) {
 
   if (errors.length) throw new ConfigError(errors);
   return c;
+}
+
+/** A text color: CSS color string, or a map per state/class ({on, off, …}). */
+function checkColor(value, path, err) {
+  if (value === undefined || value === null) return;
+  if (typeof value === "string") {
+    if (!isSafeCssValue(value)) err(`${path} „${value}“ ist keine gültige Farbe.`);
+    return;
+  }
+  if (!isPlainObject(value)) return err(`${path} muss eine Farbe oder eine Zuordnung je Zustand sein (z. B. "on": "#22c55e").`);
+  for (const [k, v] of Object.entries(value)) {
+    if (!isSafeCssValue(String(v))) err(`${path}.${k} „${v}“ ist keine gültige Farbe.`);
+  }
+  return undefined;
 }
 
 function checkEntity(value, path, err) {
@@ -2906,6 +2923,7 @@ const EDITOR_STYLES = `
 .sgbc-ed-button.add { align-self: flex-start; color: var(--primary-color); }
 .sgbc-ed-button ha-icon { --mdc-icon-size: 20px; }
 .sgbc-ed-note { margin: 0; font-size: 13px; color: var(--secondary-text-color); }
+.sgbc-ed-subtitle { margin-top: 4px; font-size: 14px; font-weight: 500; color: var(--primary-text-color); }
 .sgbc-ed-hint { margin: 12px 0 0; font-size: 12px; color: var(--secondary-text-color); }
 `;
 
@@ -3218,7 +3236,26 @@ class SmartGraphButtonCardEditor extends EditorBase {
       colorField("Hintergrund „Ein“", get(c, "state_background.colors.on"), (v) => this._set("state_background.colors.on", v), "rgba(34, 197, 94, 0.15)"),
       colorField("Hintergrund „Aus“", get(c, "state_background.colors.off"), (v) => this._set("state_background.colors.off", v), "rgba(148, 163, 184, 0.08)")
     );
-    body.append(icons, this._panelForm(stateBackgroundSchema), backgrounds);
+    body.append(icons, this._panelForm(stateBackgroundSchema), backgrounds, h("div", "sgbc-ed-subtitle", "Schrift"), this._textColors());
+  }
+
+  /** Font colors. Maps per state (YAML) are kept and only shown as a note. */
+  _textColors() {
+    const c = this._config;
+    const grid = h("div", "sgbc-ed-grid");
+    const field = (label, path, placeholder) => {
+      const value = get(c, path);
+      if (value && typeof value === "object") {
+        const note = h("div", "sgbc-ed-field");
+        note.append(h("label", "", label), h("p", "sgbc-ed-note", "Je Zustand im YAML-Modus festgelegt"));
+        return note;
+      }
+      return colorField(label, value, (v) => this._set(path, v), placeholder);
+    };
+    grid.append(field("Name", "name_style.color", "#ffffff"), field("Werte (beide)", "values.color", "#9ca3af"));
+    if (c.value_1) grid.append(field("Wert 1", "value_1.color", "#9ca3af"));
+    if (c.value_2) grid.append(field("Wert 2", "value_2.color", "#9ca3af"));
+    return grid;
   }
 
   /** Current threshold list (always read fresh – never from a render closure). */
@@ -3250,7 +3287,9 @@ class SmartGraphButtonCardEditor extends EditorBase {
       get(before, "graph.color_mode") !== get(config, "graph.color_mode") ||
       get(before, "graph.threshold_mode") !== get(config, "graph.threshold_mode") ||
       get(before, "graph.entity") !== get(config, "graph.entity") ||
-      get(before, "graph.enabled") !== get(config, "graph.enabled");
+      get(before, "graph.enabled") !== get(config, "graph.enabled") ||
+      Boolean(before.value_1) !== Boolean(config.value_1) ||
+      Boolean(before.value_2) !== Boolean(config.value_2);
     this._emit(config);
     this._syncForms();
     if (structural) this._renderPanels();
@@ -3290,7 +3329,7 @@ const { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx } = __m_utils_
 const { EDITOR_TAG } = __m_smart_graph_button_card_editor_js;
 
 const CARD_TAG = "smart-graph-button-card";
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.3.0";
 
 let instanceCounter = 0;
 
@@ -3825,6 +3864,7 @@ class SmartGraphButtonCard extends HTMLElement {
     setVar("--sgbc-state-background", cb ? mix(cb, 16) : c.state_background.enabled ? resolveColor(c.state_background.colors, group, customClass) : null);
     const nameColor = override("name") ?? (userSet(this._rawConfig, "name_style.color") ? resolveColor(c.name_style.color, group, customClass) : null);
     setVar("--sgbc-name-color", nameColor);
+    setVar("--sgbc-value-color", resolveColor(c.values.color, group, customClass));
 
     // icon
     this._updateIcon(mainObj, group, customClass);

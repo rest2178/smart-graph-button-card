@@ -332,6 +332,7 @@ const EDITOR_STYLES = `
 .sgbc-ed-button.add { align-self: flex-start; color: var(--primary-color); }
 .sgbc-ed-button ha-icon { --mdc-icon-size: 20px; }
 .sgbc-ed-note { margin: 0; font-size: 13px; color: var(--secondary-text-color); }
+.sgbc-ed-subtitle { margin-top: 4px; font-size: 14px; font-weight: 500; color: var(--primary-text-color); }
 .sgbc-ed-hint { margin: 12px 0 0; font-size: 12px; color: var(--secondary-text-color); }
 `;
 
@@ -644,7 +645,26 @@ class SmartGraphButtonCardEditor extends EditorBase {
       colorField("Hintergrund „Ein“", get(c, "state_background.colors.on"), (v) => this._set("state_background.colors.on", v), "rgba(34, 197, 94, 0.15)"),
       colorField("Hintergrund „Aus“", get(c, "state_background.colors.off"), (v) => this._set("state_background.colors.off", v), "rgba(148, 163, 184, 0.08)")
     );
-    body.append(icons, this._panelForm(stateBackgroundSchema), backgrounds);
+    body.append(icons, this._panelForm(stateBackgroundSchema), backgrounds, h("div", "sgbc-ed-subtitle", "Schrift"), this._textColors());
+  }
+
+  /** Font colors. Maps per state (YAML) are kept and only shown as a note. */
+  _textColors() {
+    const c = this._config;
+    const grid = h("div", "sgbc-ed-grid");
+    const field = (label, path, placeholder) => {
+      const value = get(c, path);
+      if (value && typeof value === "object") {
+        const note = h("div", "sgbc-ed-field");
+        note.append(h("label", "", label), h("p", "sgbc-ed-note", "Je Zustand im YAML-Modus festgelegt"));
+        return note;
+      }
+      return colorField(label, value, (v) => this._set(path, v), placeholder);
+    };
+    grid.append(field("Name", "name_style.color", "#ffffff"), field("Werte (beide)", "values.color", "#9ca3af"));
+    if (c.value_1) grid.append(field("Wert 1", "value_1.color", "#9ca3af"));
+    if (c.value_2) grid.append(field("Wert 2", "value_2.color", "#9ca3af"));
+    return grid;
   }
 
   /** Current threshold list (always read fresh – never from a render closure). */
@@ -676,7 +696,9 @@ class SmartGraphButtonCardEditor extends EditorBase {
       get(before, "graph.color_mode") !== get(config, "graph.color_mode") ||
       get(before, "graph.threshold_mode") !== get(config, "graph.threshold_mode") ||
       get(before, "graph.entity") !== get(config, "graph.entity") ||
-      get(before, "graph.enabled") !== get(config, "graph.enabled");
+      get(before, "graph.enabled") !== get(config, "graph.enabled") ||
+      Boolean(before.value_1) !== Boolean(config.value_1) ||
+      Boolean(before.value_2) !== Boolean(config.value_2);
     this._emit(config);
     this._syncForms();
     if (structural) this._renderPanels();

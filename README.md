@@ -219,7 +219,31 @@ Die **erste** passende Regel gewinnt. `class` wird als CSS-Klasse `custom-<class
 | `thresholds` | Wertfarbe nach Grenzwerten: `[{value: 0, color: …}, …]` |
 | `raw` | `true`: Rohzustand statt der nativ lokalisierten HA-Anzeige |
 
-`values`: `layout: inline | stacked` (Standard `inline`), `separator: " · "`, `gap: 4px`, `font_size: 12px`.
+`values`: `layout: inline | stacked` (Standard `inline`), `separator: " · "`, `gap: 4px`, `font_size: 12px`, `color` (Schriftfarbe beider Werte).
+
+### Schriftfarben
+
+| Option | Wirkt auf | Standard |
+| --- | --- | --- |
+| `name_style.color` | Name | `var(--primary-text-color)` |
+| `values.color` | beide Werte inkl. Einheit, Symbol und Trennzeichen | `var(--secondary-text-color)` |
+| `value_1.color` / `value_2.color` | nur diesen Wert (hat Vorrang vor `values.color`) | `values.color` |
+
+Jede Schriftfarbe ist eine CSS-Farbe oder eine Zuordnung je Zustand bzw. eigener Klasse:
+
+```yaml
+name_style:
+  color: "#ffffff"
+values:
+  color:
+    "on": "#22c55e"
+    "off": "#9ca3af"
+value_2:
+  entity: sensor.schreibtisch_1_power
+  color: "#f59e0b"
+```
+
+Vorrang: `thresholds.apply_to` (`name`, `value-1`, `value-2`) → `states[].color` über `color_targets` → Wert-Grenzwerte (`value_N.thresholds`) → konfigurierte Farbe → Theme. Im Editor stehen die Schriftfarben unter „Farben & Hintergrund → Schrift“. Ist eine Farbe im YAML je Zustand festgelegt, zeigt der Editor nur einen Hinweis und lässt die Zuordnung unverändert.
 
 Es wird **nie** `undefined`, `null`, `NaN` oder `Infinity` angezeigt. In solchen Fällen erscheint `fallback`.
 
@@ -484,7 +508,7 @@ Im Karteneditor stehen zur Verfügung:
 - **Entity, Name, Symbol** sowie **Werte** (Wert 1 und Wert 2)
 - **Graph:** aktivieren, Entity, Typ, Position, Zeitraum, weicher Übergang am Beginn und am Ende (Schieberegler)
 - **Graph-Farben:** Farbmodus wählen. Je nach Modus erscheinen eine feste Farbe, Farben für Ein/Aus, Verlauf von/bis, Farben über/unter null oder die **Grenzwertliste**: Zeilen mit „Ab Wert“ und Farbe, beliebig viele über „Grenzwert hinzufügen“, Entfernen mit ✕. Beim ersten Wechsel auf „Nach Grenzwerten“ ist die Liste mit 10/50/100/200 vorbelegt.
-- **Farben & Hintergrund:** Symbolfarben und Statushintergrund für Ein/Aus
+- **Farben & Hintergrund:** Symbolfarben und Statushintergrund für Ein/Aus, Schriftfarben für Name, beide Werte, Wert 1 und Wert 2
 - **Interaktionen:** Tap, Hold, Double-Tap
 
 **Farbfelder:** Ein Klick auf den runden Farbkreis öffnet die Farbauswahl des Browsers (Maus). Im Textfeld daneben kann jeder CSS-Wert eingetippt werden, z. B. `#22c55e`, `rgba(34, 197, 94, 0.15)`, `orange` oder `var(--primary-color)`. Wird bei einer halbtransparenten `rgba()`-Farbe mit der Maus eine neue Farbe gewählt, bleibt die Transparenz erhalten.

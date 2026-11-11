@@ -17,7 +17,7 @@ import { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx } from "./uti
 import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
 
 export const CARD_TAG = "smart-graph-button-card";
-export const CARD_VERSION = "1.2.0";
+export const CARD_VERSION = "1.3.0";
 
 let instanceCounter = 0;
 
@@ -552,6 +552,7 @@ export class SmartGraphButtonCard extends HTMLElement {
     setVar("--sgbc-state-background", cb ? mix(cb, 16) : c.state_background.enabled ? resolveColor(c.state_background.colors, group, customClass) : null);
     const nameColor = override("name") ?? (userSet(this._rawConfig, "name_style.color") ? resolveColor(c.name_style.color, group, customClass) : null);
     setVar("--sgbc-name-color", nameColor);
+    setVar("--sgbc-value-color", resolveColor(c.values.color, group, customClass));
 
     // icon
     this._updateIcon(mainObj, group, customClass);

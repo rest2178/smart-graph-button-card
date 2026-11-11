@@ -84,3 +84,11 @@ test("sign color mode and smooth-area defaults", () => {
   assert.equal(validateConfig({ entity: "sensor.grid", graph: { type: "smooth-area", fill_opacity: 0.3 } }).graph.fill_opacity, 0.3);
   throwsWith({ entity: "sensor.grid", graph: { color_mode: "sign", split_at: "x" } }, /split_at/);
 });
+
+test("text colors: strings and per-state maps, invalid values rejected", () => {
+  const c = validateConfig({ ...base, name_style: { color: "#fff" }, values: { color: { on: "#22c55e", off: "#999" } }, value_1: { type: "state", color: "red" } });
+  assert.equal(c.name_style.color, "#fff");
+  assert.deepEqual(c.values.color, { on: "#22c55e", off: "#999" });
+  throwsWith({ ...base, values: { color: "red; background: url(x)" } }, /values\.color/);
+  throwsWith({ ...base, value_2: { entity: "sensor.p", color: { on: "<b>" } } }, /value_2\.color\.on/);
+});
