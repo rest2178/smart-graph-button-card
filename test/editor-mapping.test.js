@@ -108,3 +108,13 @@ test("editor: value offset sliders", () => {
   const back = formToConfig(out, { ...configToForm(out), value_offset_y: 0 });
   assert.equal(back.value_offset, undefined);
 });
+
+test("editor: icon position and offset", () => {
+  const cfg = { type: "custom:smart-graph-info-card", entity: "sensor.t" };
+  const form = configToForm(cfg);
+  assert.equal(form.icon_position, "name-left");
+  const out = formToConfig(cfg, { ...form, icon_position: "top-right", icon_offset_x: 4 });
+  assert.equal(out.icon_position, "top-right");
+  assert.deepEqual(out.icon_offset, { x: 4 });
+  assert.equal(formToConfig(out, { ...configToForm(out), icon_position: "name-left" }).icon_position, undefined);
+});

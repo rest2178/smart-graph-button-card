@@ -73,6 +73,8 @@ export function paddingSide(padding, side) {
   if (s.includes("(")) return s;
   const p = s.split(/\s+/);
   if (side === "left") return p[3] ?? p[1] ?? p[0];
+  if (side === "top") return p[0];
+  if (side === "bottom") return p[2] ?? p[0];
   return p[1] ?? p[0];
 }
 

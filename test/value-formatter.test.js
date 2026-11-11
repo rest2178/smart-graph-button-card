@@ -98,3 +98,10 @@ test("paddingSide picks the left/right part of a padding shorthand", async () =>
   assert.equal(paddingSide("1px 2px 3px 4px", "right"), "2px");
   assert.equal(paddingSide("var(--pad)", "left"), "var(--pad)");
 });
+
+test("paddingSide top/bottom", async () => {
+  const { paddingSide } = await import("../src/utils.js");
+  assert.equal(paddingSide("8px 10px", "top"), "8px");
+  assert.equal(paddingSide("8px 10px", "bottom"), "8px");
+  assert.equal(paddingSide("1px 2px 3px", "bottom"), "3px");
+});

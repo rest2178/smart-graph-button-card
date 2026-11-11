@@ -154,6 +154,26 @@ value_offset:
   y: 6     # px, positiv = nach unten
 ```
 
+**Position des Symbols** (`icon_position`, im Editor „Position des Symbols“):
+
+| Wert | Lage |
+| --- | --- |
+| `name-left` (Standard) | in der Kopfzeile vor dem Namen |
+| `name-right` | in der Kopfzeile rechts (hinter Name bzw. Wert) |
+| `top-left`, `top-center`, `top-right` | frei in der Karte oben; bei links/rechts hält der Name Abstand zum Symbol |
+| `middle-left`, `middle-center`, `middle-right` | vertikal mittig |
+| `bottom-left`, `bottom-center`, `bottom-right` | am unteren Rand |
+
+Feinverschiebung mit `icon_offset` (x/y in px), im Editor mit zwei Schiebereglern. Die Größe des Symbols steuern `icon_area.icon_size` und `icon_area.size`:
+
+```yaml
+icon_position: top-right
+icon_offset: { x: 2, y: -2 }
+icon_area:
+  size: 26px
+  icon_size: 24px
+```
+
 Die Schriftgrößen von Name und Wert wachsen mit der Kartenbreite (maximal 24 px für den Wert). Dadurch passen auch auf dem Handy 4 Karten nebeneinander. Mit `value_1.font_size` und `name_style.font_size` lassen sich feste Größen setzen. In Sections-Dashboards belegt die Info-Karte standardmäßig 3 von 12 Spalten, also 4 pro Zeile. Ein Beispiel mit 4 Karten in einem `horizontal-stack` steht in [`examples/info-cards.yaml`](examples/info-cards.yaml).
 
 Mit `variant: info` lässt sich die Info-Darstellung auch für `custom:smart-graph-button-card` einschalten. Im Editor heißt das „Darstellung → Info-Karte“.

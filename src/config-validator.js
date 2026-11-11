@@ -25,6 +25,13 @@ export const VALUE_POSITIONS = [
   "bottom-left", "bottom-center", "bottom-right",
   "name-right",
 ];
+/** Position of the icon in the info card. */
+export const INFO_ICON_POSITIONS = [
+  "name-left", "name-right",
+  "top-left", "top-center", "top-right",
+  "middle-left", "middle-center", "middle-right",
+  "bottom-left", "bottom-center", "bottom-right",
+];
 export const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
 export const ICON_POSITIONS = ["left", "right"];
 export const ANIMATIONS = ["none", "pulse", "rotate", "blink"];
@@ -64,6 +71,8 @@ export const DEFAULTS = Object.freeze({
   show_name: true,
   value_position: "top-left",
   value_offset: { x: "0px", y: "0px" },
+  icon_position: "name-left",
+  icon_offset: { x: "0px", y: "0px" },
   icon_area: {
     enabled: true,
     shape: "circle",
@@ -389,6 +398,16 @@ export function validateConfig(raw) {
     c.value_offset.x = cssLen(c.value_offset.x ?? 0, "value_offset.x", err);
     c.value_offset.y = cssLen(c.value_offset.y ?? 0, "value_offset.y", err);
   }
+  for (const key of ["icon_offset"]) {
+    if (!isPlainObject(c[key])) {
+      err(`${key} muss ein Objekt mit x und y sein (z. B. x: 4, y: -6).`);
+      c[key] = { x: "0px", y: "0px" };
+    } else {
+      c[key].x = cssLen(c[key].x ?? 0, `${key}.x`, err);
+      c[key].y = cssLen(c[key].y ?? 0, `${key}.y`, err);
+    }
+  }
+  if (!INFO_ICON_POSITIONS.includes(c.icon_position)) err(`icon_position „${c.icon_position}“ ist ungültig. Erlaubt: ${INFO_ICON_POSITIONS.join(", ")}.`);
   if (!VALUE_POSITIONS.includes(c.value_position)) err(`value_position „${c.value_position}“ ist ungültig. Erlaubt: ${VALUE_POSITIONS.join(", ")}.`);
   c.hold_time = clamp(parseNumber(c.hold_time) ?? DEFAULT_HOLD_TIME, 200, 5000);
   c.double_tap_window = clamp(parseNumber(c.double_tap_window) ?? DEFAULT_DOUBLE_TAP_WINDOW, 100, 1000);

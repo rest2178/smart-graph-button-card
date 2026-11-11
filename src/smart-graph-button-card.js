@@ -439,14 +439,24 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (isInfo) {
       // info layout: [icon name] on top, large value below
       const head = el("div", "info-head");
-      // no name and no icon: drop the header row so the value can use the full height
-      if (!c.show_name && !iconWrap && c.value_position !== "name-right") head.classList.add("hidden");
-      if (iconWrap) head.append(iconWrap);
+      const iconInHead = Boolean(iconWrap) && (c.icon_position === "name-left" || c.icon_position === "name-right");
+      // nothing left in the header row: drop it so the value can use the full height
+      if (!c.show_name && !iconInHead && c.value_position !== "name-right") head.classList.add("hidden");
+      if (iconWrap && c.icon_position === "name-left") head.append(iconWrap);
       head.append(name);
+      if (iconWrap && !iconInHead) {
+        // icon placed freely in the card (corner, centre, …)
+        const [iv, ih] = c.icon_position.split("-");
+        iconWrap.classList.add("icon-abs", `ipos-v-${iv}`, `ipos-h-${ih}`);
+        content.classList.add(`ipos-${c.icon_position}`); // keeps the name clear of a corner icon
+        content.append(iconWrap);
+      }
       if (c.value_position === "name-right") {
         head.append(values); // value in the header row, right of the name
+        if (iconWrap && c.icon_position === "name-right") head.append(iconWrap);
         info.append(head);
       } else {
+        if (iconWrap && c.icon_position === "name-right") head.append(iconWrap);
         const [v, hz] = c.value_position.split("-");
         content.classList.add(`vpos-v-${v}`, `vpos-h-${hz}`);
         info.append(head, values);
@@ -494,6 +504,9 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (isInfo) {
       setVar("--sgbc-value-dx", c.value_offset.x);
       setVar("--sgbc-value-dy", c.value_offset.y);
+      setVar("--sgbc-icon-dx", c.icon_offset.x);
+      setVar("--sgbc-icon-dy", c.icon_offset.y);
+      for (const side of ["top", "right", "bottom", "left"]) setVar(`--sgbc-pad-${side}`, paddingSide(c.layout.padding, side));
     }
     for (const i of [1, 2]) {
       const v = c[`value_${i}`];

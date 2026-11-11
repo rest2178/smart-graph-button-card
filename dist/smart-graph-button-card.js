@@ -246,9 +246,23 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 .vpos-v-bottom .values { margin-top: auto; }
 .vpos-h-center .values { align-self: center; max-width: 100%; }
 .vpos-h-right .values { align-self: flex-end; max-width: 100%; }
-.info-head .values { flex: 0 1 auto; margin-left: auto; max-width: 65%; }
+.info-head .values { flex: 0 0 auto; margin-left: auto; max-width: 65%; }
+.info-head .name { min-width: 0; flex: 1 1 0; }
 .info-layout .values { transform: translate(var(--sgbc-value-dx, 0px), var(--sgbc-value-dy, 0px)); }
 .info-head.hidden { display: none; }
+/* icon position (info card) */
+.info-layout .icon-wrap { transform: translate(var(--sgbc-icon-dx, 0px), var(--sgbc-icon-dy, 0px)); }
+.info-head .name + .icon-wrap, .info-head .values + .icon-wrap { margin-left: auto; }
+.info-head .name + .values + .icon-wrap { margin-left: 6px; }
+.info-layout .icon-wrap.icon-abs { position: absolute; z-index: 1; }
+.ipos-top-right .info-head { padding-right: calc(var(--sgbc-icon-area-size, 18px) + 4px); }
+.ipos-top-left .info-head { padding-left: calc(var(--sgbc-icon-area-size, 18px) + 4px); }
+.icon-abs.ipos-v-top { top: var(--sgbc-pad-top, 8px); }
+.icon-abs.ipos-v-bottom { bottom: var(--sgbc-pad-bottom, 8px); }
+.icon-abs.ipos-v-middle { top: 50%; margin-top: calc(var(--sgbc-icon-area-size, 18px) / -2); }
+.icon-abs.ipos-h-left { left: var(--sgbc-pad-left, 10px); }
+.icon-abs.ipos-h-right { right: var(--sgbc-pad-right, 10px); }
+.icon-abs.ipos-h-center { left: 50%; margin-left: calc(var(--sgbc-icon-area-size, 18px) / -2); }
 .info-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .info-head .name { flex: 1; }
 .info-layout .icon-area { overflow: visible; }
@@ -389,6 +403,8 @@ function paddingSide(padding, side) {
   if (s.includes("(")) return s;
   const p = s.split(/\s+/);
   if (side === "left") return p[3] ?? p[1] ?? p[0];
+  if (side === "top") return p[0];
+  if (side === "bottom") return p[2] ?? p[0];
   return p[1] ?? p[0];
 }
 
@@ -2113,6 +2129,13 @@ const VALUE_POSITIONS = [
   "bottom-left", "bottom-center", "bottom-right",
   "name-right",
 ];
+/** Position of the icon in the info card. */
+const INFO_ICON_POSITIONS = [
+  "name-left", "name-right",
+  "top-left", "top-center", "top-right",
+  "middle-left", "middle-center", "middle-right",
+  "bottom-left", "bottom-center", "bottom-right",
+];
 const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
 const ICON_POSITIONS = ["left", "right"];
 const ANIMATIONS = ["none", "pulse", "rotate", "blink"];
@@ -2152,6 +2175,8 @@ const DEFAULTS = Object.freeze({
   show_name: true,
   value_position: "top-left",
   value_offset: { x: "0px", y: "0px" },
+  icon_position: "name-left",
+  icon_offset: { x: "0px", y: "0px" },
   icon_area: {
     enabled: true,
     shape: "circle",
@@ -2477,6 +2502,16 @@ function validateConfig(raw) {
     c.value_offset.x = cssLen(c.value_offset.x ?? 0, "value_offset.x", err);
     c.value_offset.y = cssLen(c.value_offset.y ?? 0, "value_offset.y", err);
   }
+  for (const key of ["icon_offset"]) {
+    if (!isPlainObject(c[key])) {
+      err(`${key} muss ein Objekt mit x und y sein (z. B. x: 4, y: -6).`);
+      c[key] = { x: "0px", y: "0px" };
+    } else {
+      c[key].x = cssLen(c[key].x ?? 0, `${key}.x`, err);
+      c[key].y = cssLen(c[key].y ?? 0, `${key}.y`, err);
+    }
+  }
+  if (!INFO_ICON_POSITIONS.includes(c.icon_position)) err(`icon_position „${c.icon_position}“ ist ungültig. Erlaubt: ${INFO_ICON_POSITIONS.join(", ")}.`);
   if (!VALUE_POSITIONS.includes(c.value_position)) err(`value_position „${c.value_position}“ ist ungültig. Erlaubt: ${VALUE_POSITIONS.join(", ")}.`);
   c.hold_time = clamp(parseNumber(c.hold_time) ?? DEFAULT_HOLD_TIME, 200, 5000);
   c.double_tap_window = clamp(parseNumber(c.double_tap_window) ?? DEFAULT_DOUBLE_TAP_WINDOW, 100, 1000);
@@ -2691,7 +2726,7 @@ function normalizeGraph(rawGraph, c, err) {
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }
-return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, VALUE_POSITIONS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, validateConfig, fadeLength };
+return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, VALUE_POSITIONS, INFO_ICON_POSITIONS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, validateConfig, fadeLength };
 })();
 
 // ---- src/color-utils.js
@@ -2786,6 +2821,20 @@ const VALUE_POSITIONS = [
   ["name-right", "Neben dem Namen (rechts)"],
 ];
 
+const INFO_ICON_POSITIONS = [
+  ["name-left", "Vor dem Namen (Standard)"],
+  ["name-right", "Hinter dem Namen (rechts)"],
+  ["top-left", "Oben links"],
+  ["top-center", "Oben mittig"],
+  ["top-right", "Oben rechts"],
+  ["middle-left", "Mitte links"],
+  ["middle-center", "Mitte"],
+  ["middle-right", "Mitte rechts"],
+  ["bottom-left", "Unten links"],
+  ["bottom-center", "Unten mittig"],
+  ["bottom-right", "Unten rechts"],
+];
+
 const GRAPH_TYPES = [
   ["line", "Linie"],
   ["area", "Fläche"],
@@ -2861,6 +2910,9 @@ const LABELS = {
   value_position: "Position des Werts",
   value_offset_x: "Wert verschieben – horizontal",
   value_offset_y: "Wert verschieben – vertikal",
+  icon_position: "Position des Symbols",
+  icon_offset_x: "Symbol verschieben – horizontal",
+  icon_offset_y: "Symbol verschieben – vertikal",
   graph_gradient_direction: "Richtung",
   state_background_enabled: "Statushintergrund aktivieren",
   tap_action: "Tap-Aktion",
@@ -2896,6 +2948,15 @@ function mainSchema(cfg) {
             schema: [
               { name: "value_offset_x", selector: { number: { min: -60, max: 60, step: 1, mode: "slider", unit_of_measurement: "px" } } },
               { name: "value_offset_y", selector: { number: { min: -30, max: 30, step: 1, mode: "slider", unit_of_measurement: "px" } } },
+            ],
+          },
+          { name: "icon_position", selector: { select: { mode: "dropdown", options: options(INFO_ICON_POSITIONS) } } },
+          {
+            type: "grid",
+            name: "",
+            schema: [
+              { name: "icon_offset_x", selector: { number: { min: -60, max: 60, step: 1, mode: "slider", unit_of_measurement: "px" } } },
+              { name: "icon_offset_y", selector: { number: { min: -30, max: 30, step: 1, mode: "slider", unit_of_measurement: "px" } } },
             ],
           },
         ]
@@ -3046,6 +3107,9 @@ function configToForm(config) {
     value_position: c.value_position || "top-left",
     value_offset_x: pxNumber(get(c, "value_offset.x")),
     value_offset_y: pxNumber(get(c, "value_offset.y")),
+    icon_position: c.icon_position || "name-left",
+    icon_offset_x: pxNumber(get(c, "icon_offset.x")),
+    icon_offset_y: pxNumber(get(c, "icon_offset.y")),
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
     state_background_enabled: Boolean(get(c, "state_background.enabled")),
     tap_action: c.tap_action,
@@ -3059,11 +3123,15 @@ function formToConfig(config, form) {
   const out = clone(config);
   const d = form || {};
   setPath(out, "entity", d.entity);
-  for (const axis of ["x", "y"]) {
-    const v = d[`value_offset_${axis}`];
-    if (typeof v === "number" && v !== pxNumber(get(config, `value_offset.${axis}`))) setPath(out, `value_offset.${axis}`, v === 0 ? undefined : v);
+  for (const key of ["value_offset", "icon_offset"]) {
+    for (const axis of ["x", "y"]) {
+      const v = d[`${key}_${axis}`];
+      if (typeof v === "number" && v !== pxNumber(get(config, `${key}.${axis}`))) setPath(out, `${key}.${axis}`, v === 0 ? undefined : v);
+    }
+    pruneEmpty(out, `${key}.x`);
   }
-  pruneEmpty(out, "value_offset.x");
+  if (d.icon_position && d.icon_position !== "name-left") out.icon_position = d.icon_position;
+  else if (d.icon_position === "name-left") delete out.icon_position;
   if (d.value_position && d.value_position !== "top-left") out.value_position = d.value_position;
   else if (d.value_position === "top-left") delete out.value_position;
   if (d.show_name === false) out.show_name = false;
@@ -3995,14 +4063,24 @@ class SmartGraphButtonCard extends HTMLElement {
     if (isInfo) {
       // info layout: [icon name] on top, large value below
       const head = el("div", "info-head");
-      // no name and no icon: drop the header row so the value can use the full height
-      if (!c.show_name && !iconWrap && c.value_position !== "name-right") head.classList.add("hidden");
-      if (iconWrap) head.append(iconWrap);
+      const iconInHead = Boolean(iconWrap) && (c.icon_position === "name-left" || c.icon_position === "name-right");
+      // nothing left in the header row: drop it so the value can use the full height
+      if (!c.show_name && !iconInHead && c.value_position !== "name-right") head.classList.add("hidden");
+      if (iconWrap && c.icon_position === "name-left") head.append(iconWrap);
       head.append(name);
+      if (iconWrap && !iconInHead) {
+        // icon placed freely in the card (corner, centre, …)
+        const [iv, ih] = c.icon_position.split("-");
+        iconWrap.classList.add("icon-abs", `ipos-v-${iv}`, `ipos-h-${ih}`);
+        content.classList.add(`ipos-${c.icon_position}`); // keeps the name clear of a corner icon
+        content.append(iconWrap);
+      }
       if (c.value_position === "name-right") {
         head.append(values); // value in the header row, right of the name
+        if (iconWrap && c.icon_position === "name-right") head.append(iconWrap);
         info.append(head);
       } else {
+        if (iconWrap && c.icon_position === "name-right") head.append(iconWrap);
         const [v, hz] = c.value_position.split("-");
         content.classList.add(`vpos-v-${v}`, `vpos-h-${hz}`);
         info.append(head, values);
@@ -4050,6 +4128,9 @@ class SmartGraphButtonCard extends HTMLElement {
     if (isInfo) {
       setVar("--sgbc-value-dx", c.value_offset.x);
       setVar("--sgbc-value-dy", c.value_offset.y);
+      setVar("--sgbc-icon-dx", c.icon_offset.x);
+      setVar("--sgbc-icon-dy", c.icon_offset.y);
+      for (const side of ["top", "right", "bottom", "left"]) setVar(`--sgbc-pad-${side}`, paddingSide(c.layout.padding, side));
     }
     for (const i of [1, 2]) {
       const v = c[`value_${i}`];

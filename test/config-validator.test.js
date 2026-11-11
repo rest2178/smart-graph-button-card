@@ -148,3 +148,13 @@ test("info value_offset", () => {
   assert.deepEqual(c.value_offset, { x: "0px", y: "-6px" });
   throwsWith({ entity: "sensor.t", variant: "info", value_offset: { x: "links" } }, /value_offset\.x/);
 });
+
+test("info icon_position and icon_offset", () => {
+  const c = validateConfig({ entity: "sensor.t", variant: "info" });
+  assert.equal(c.icon_position, "name-left");
+  assert.deepEqual(c.icon_offset, { x: "0px", y: "0px" });
+  const d = validateConfig({ entity: "sensor.t", variant: "info", icon_position: "top-right", icon_offset: { x: -2 } });
+  assert.equal(d.icon_position, "top-right");
+  assert.equal(d.icon_offset.x, "-2px");
+  throwsWith({ entity: "sensor.t", variant: "info", icon_position: "ecke" }, /icon_position/);
+});

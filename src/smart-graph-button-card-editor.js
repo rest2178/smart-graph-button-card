@@ -29,6 +29,20 @@ const VALUE_POSITIONS = [
   ["name-right", "Neben dem Namen (rechts)"],
 ];
 
+const INFO_ICON_POSITIONS = [
+  ["name-left", "Vor dem Namen (Standard)"],
+  ["name-right", "Hinter dem Namen (rechts)"],
+  ["top-left", "Oben links"],
+  ["top-center", "Oben mittig"],
+  ["top-right", "Oben rechts"],
+  ["middle-left", "Mitte links"],
+  ["middle-center", "Mitte"],
+  ["middle-right", "Mitte rechts"],
+  ["bottom-left", "Unten links"],
+  ["bottom-center", "Unten mittig"],
+  ["bottom-right", "Unten rechts"],
+];
+
 const GRAPH_TYPES = [
   ["line", "Linie"],
   ["area", "Fläche"],
@@ -104,6 +118,9 @@ const LABELS = {
   value_position: "Position des Werts",
   value_offset_x: "Wert verschieben – horizontal",
   value_offset_y: "Wert verschieben – vertikal",
+  icon_position: "Position des Symbols",
+  icon_offset_x: "Symbol verschieben – horizontal",
+  icon_offset_y: "Symbol verschieben – vertikal",
   graph_gradient_direction: "Richtung",
   state_background_enabled: "Statushintergrund aktivieren",
   tap_action: "Tap-Aktion",
@@ -139,6 +156,15 @@ function mainSchema(cfg) {
             schema: [
               { name: "value_offset_x", selector: { number: { min: -60, max: 60, step: 1, mode: "slider", unit_of_measurement: "px" } } },
               { name: "value_offset_y", selector: { number: { min: -30, max: 30, step: 1, mode: "slider", unit_of_measurement: "px" } } },
+            ],
+          },
+          { name: "icon_position", selector: { select: { mode: "dropdown", options: options(INFO_ICON_POSITIONS) } } },
+          {
+            type: "grid",
+            name: "",
+            schema: [
+              { name: "icon_offset_x", selector: { number: { min: -60, max: 60, step: 1, mode: "slider", unit_of_measurement: "px" } } },
+              { name: "icon_offset_y", selector: { number: { min: -30, max: 30, step: 1, mode: "slider", unit_of_measurement: "px" } } },
             ],
           },
         ]
@@ -289,6 +315,9 @@ export function configToForm(config) {
     value_position: c.value_position || "top-left",
     value_offset_x: pxNumber(get(c, "value_offset.x")),
     value_offset_y: pxNumber(get(c, "value_offset.y")),
+    icon_position: c.icon_position || "name-left",
+    icon_offset_x: pxNumber(get(c, "icon_offset.x")),
+    icon_offset_y: pxNumber(get(c, "icon_offset.y")),
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
     state_background_enabled: Boolean(get(c, "state_background.enabled")),
     tap_action: c.tap_action,
@@ -302,11 +331,15 @@ export function formToConfig(config, form) {
   const out = clone(config);
   const d = form || {};
   setPath(out, "entity", d.entity);
-  for (const axis of ["x", "y"]) {
-    const v = d[`value_offset_${axis}`];
-    if (typeof v === "number" && v !== pxNumber(get(config, `value_offset.${axis}`))) setPath(out, `value_offset.${axis}`, v === 0 ? undefined : v);
+  for (const key of ["value_offset", "icon_offset"]) {
+    for (const axis of ["x", "y"]) {
+      const v = d[`${key}_${axis}`];
+      if (typeof v === "number" && v !== pxNumber(get(config, `${key}.${axis}`))) setPath(out, `${key}.${axis}`, v === 0 ? undefined : v);
+    }
+    pruneEmpty(out, `${key}.x`);
   }
-  pruneEmpty(out, "value_offset.x");
+  if (d.icon_position && d.icon_position !== "name-left") out.icon_position = d.icon_position;
+  else if (d.icon_position === "name-left") delete out.icon_position;
   if (d.value_position && d.value_position !== "top-left") out.value_position = d.value_position;
   else if (d.value_position === "top-left") delete out.value_position;
   if (d.show_name === false) out.show_name = false;
