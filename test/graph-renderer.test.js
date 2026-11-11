@@ -88,3 +88,22 @@ test("smooth-line-bar with per-point threshold colors (many thresholds)", () => 
   for (const c of ["gray", "green", "yellow", "orange", "red"]) assert.match(svg, new RegExp(`fill:${c}`), c);
   assert.match(svg, /linearGradient id="sgbc-pp"/);
 });
+
+test("smooth-area: rounded line, area to zero with fading fill", () => {
+  const svg = renderGraphSVG({ data: data([100, 300, -2000, -1800, 1900, 50]), width: 300, height: 80, type: "smooth-area", color: "#0ea5e9", fillOpacity: 0.6 });
+  assert.match(svg, /<path class="area"[^>]*fill:url\(#sgbc-afill\)/);
+  assert.match(svg, /class="line" d="M[^"]*C/);
+  assert.match(svg, /stop-opacity:0.04/, "almost transparent at the zero line");
+  assert.match(svg, /stop-opacity:0.6/, "full strength far from zero");
+});
+
+test("sign colors: hard switch exactly at the zero line, bars by sign", () => {
+  const sign = { above: "purple", below: "green", at: 0 };
+  // scale -100..100 (manual) => zero line in the middle (offset 0.5)
+  const svg = renderGraphSVG({ data: data([50, -50, 80]), width: 100, height: 100, type: "smooth-area", sign, min: -100, max: 100, lineWidth: 0 });
+  assert.match(svg, /id="sgbc-sign"[^>]*>.*offset="0.5" style="stop-color:purple"\/><stop offset="0.5" style="stop-color:green"/);
+  assert.match(svg, /fill:url\(#sgbc-afill\)/);
+  const bars = renderGraphSVG({ data: data([5, -5]), width: 100, height: 40, type: "bar", sign });
+  assert.match(bars, /fill:purple/);
+  assert.match(bars, /fill:green/);
+});

@@ -14,6 +14,7 @@ export const EDITOR_TAG = "smart-graph-button-card-editor";
 const GRAPH_TYPES = [
   ["line", "Linie"],
   ["area", "Fläche"],
+  ["smooth-area", "Abgerundete Fläche (bis Null)"],
   ["bar", "Balken"],
   ["column", "Säulen"],
   ["stepped", "Stufen"],
@@ -33,6 +34,7 @@ const COLOR_MODES = [
   ["thresholds", "Nach Grenzwerten"],
   ["fixed", "Feste Farbe"],
   ["gradient", "Farbverlauf"],
+  ["sign", "Über/Unter Null (z. B. Bezug/Einspeisung)"],
 ];
 const THRESHOLD_MODES = [
   ["per-point", "Jeder Wert in eigener Farbe"],
@@ -552,6 +554,13 @@ class SmartGraphButtonCardEditor extends EditorBase {
       grid.append(
         colorField("Von", get(c, "graph.gradient.from"), (v) => this._set("graph.gradient.from", v || "#22c55e")),
         colorField("Bis", get(c, "graph.gradient.to"), (v) => this._set("graph.gradient.to", v || "#ef4444"), "#ef4444")
+      );
+      body.append(grid);
+    } else if (mode === "sign") {
+      const grid = h("div", "sgbc-ed-grid");
+      grid.append(
+        colorField("Über Null", get(c, "graph.positive_color"), (v) => this._set("graph.positive_color", v), "#a855f7"),
+        colorField("Unter Null", get(c, "graph.negative_color"), (v) => this._set("graph.negative_color", v), "#22c55e")
       );
       body.append(grid);
     } else if (mode === "thresholds") {

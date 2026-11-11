@@ -771,6 +771,13 @@ export class SmartGraphButtonCard extends HTMLElement {
           color = findThresholdColor(liveValue ?? current, this._ranges.graph) || base;
         }
         break;
+      case "sign":
+        return {
+          color: g.positive_color,
+          pointColor: null,
+          gradient: null,
+          sign: { above: g.positive_color, below: g.negative_color, at: g.split_at },
+        };
       case "gradient":
         gradient = g.gradient;
         break;
@@ -801,7 +808,7 @@ export class SmartGraphButtonCard extends HTMLElement {
       aggregation: g.aggregation,
       fill: g.fill,
     });
-    const { color, pointColor, gradient } = this._graphColors(data);
+    const { color, pointColor, gradient, sign } = this._graphColors(data);
     const locale = getNumberLocale(this._hass);
     const svg = renderGraphSVG({
       data,
@@ -811,6 +818,7 @@ export class SmartGraphButtonCard extends HTMLElement {
       color,
       pointColor,
       gradient,
+      sign,
       min: g.min,
       max: g.max,
       lineWidth: g.line_width,

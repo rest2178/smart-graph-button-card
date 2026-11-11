@@ -74,3 +74,13 @@ test("graph fade: numbers are percent, shorthand + override, limits", () => {
   throwsWith({ entity: "sensor.p", graph: { fade_start: 80 } }, /höchstens 50/);
   throwsWith({ entity: "sensor.p", graph: { fade_end: "weich" } }, /fade_end/);
 });
+
+test("sign color mode and smooth-area defaults", () => {
+  const c = validateConfig({ entity: "sensor.grid", graph: { type: "smooth-area", color_mode: "sign" } });
+  assert.equal(c.graph.positive_color, "#a855f7");
+  assert.equal(c.graph.negative_color, "#22c55e");
+  assert.equal(c.graph.split_at, 0);
+  assert.equal(c.graph.fill_opacity, 0.6);
+  assert.equal(validateConfig({ entity: "sensor.grid", graph: { type: "smooth-area", fill_opacity: 0.3 } }).graph.fill_opacity, 0.3);
+  throwsWith({ entity: "sensor.grid", graph: { color_mode: "sign", split_at: "x" } }, /split_at/);
+});

@@ -1,0 +1,28 @@
+# Example 5 – grid power (import positive, export negative) like an energy
+# chart: smooth area down to zero, purple above / green below, no axes.
+type: custom:smart-graph-button-card
+entity: sensor.stromnetz_leistung
+name: Stromnetz
+icon: mdi:transmission-tower
+value_1:
+  type: state
+  decimals: 0
+graph:
+  enabled: true
+  entity: sensor.stromnetz_leistung
+  type: smooth-area
+  position: full
+  hours_to_show: 24
+  max_points: 120
+  line_width: 2.5
+  opacity: 1
+  fill_opacity: 0.6
+  color_mode: sign
+  positive_color: "#a855f7"
+  negative_color: "#22c55e"
+  split_at: 0
+  fade_start: 15
+layout:
+  height: 110px
+tap_action:
+  action: more-info

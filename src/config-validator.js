@@ -15,7 +15,7 @@ import { VALUE_TYPES, VALUE_FORMATS } from "./value-formatter.js";
 import { MIN_UPDATE_INTERVAL } from "./history-provider.js";
 
 export const GRAPH_POSITIONS = ["full", "left", "right", "bottom", "icon-area", "custom"];
-export const COLOR_MODES = ["fixed", "state", "thresholds", "gradient"];
+export const COLOR_MODES = ["fixed", "state", "thresholds", "gradient", "sign"];
 export const THRESHOLD_MODES = ["current", "per-point"];
 export const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
 export const ICON_POSITIONS = ["left", "right"];
@@ -118,6 +118,9 @@ export const DEFAULTS = Object.freeze({
     thresholds: [],
     threshold_mode: "current",
     gradient: { from: "#22c55e", to: "#ef4444", direction: "vertical" },
+    positive_color: "#a855f7",
+    negative_color: "#22c55e",
+    split_at: 0,
     update_interval: 300,
   },
   state_background: {
@@ -497,6 +500,15 @@ function normalizeGraph(rawGraph, c, err) {
     else if (!["vertical", "horizontal"].includes(g.gradient.direction)) err("graph.gradient.direction muss vertical oder horizontal sein.");
   }
   if (g.color_mode === "fixed" && !isSafeCssValue(g.color)) err("graph.color ist ungültig.");
+  if (g.color_mode === "sign") {
+    if (!isSafeCssValue(g.positive_color)) err("graph.positive_color ist keine gültige Farbe.");
+    if (!isSafeCssValue(g.negative_color)) err("graph.negative_color ist keine gültige Farbe.");
+    const at = parseNumber(g.split_at);
+    if (at === null) err("graph.split_at muss eine Zahl sein.");
+    else g.split_at = at;
+  }
+  // the faded smooth-area looks best with a stronger fill
+  if (g.type === "smooth-area" && (!isPlainObject(rawGraph) || rawGraph.fill_opacity === undefined)) g.fill_opacity = 0.6;
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }

@@ -53,9 +53,9 @@ Eine kompakte, frei parametrierbare **Button-Karte für Home Assistant** mit Sym
 - Symbolhintergrund in den Formen `circle`, `rounded-square`, `square` oder `none`, Farben je Zustand, CSS-Animationen (`pulse`, `rotate`, `blink`); bei `prefers-reduced-motion` sind sie aus
 - Name aus der Konfiguration, aus `friendly_name`, aus einem Attribut oder aus einem sicheren Template
 - Zwei Werte, nebeneinander (`inline`) oder untereinander (`stacked`): State, Attribut, Text, Name, `last_changed`, `last_updated`, Template, Formatierungsfunktionen
-- Graph mit `line`, `area`, `bar`, `column`, `stepped`, `line-bar`, `smooth-line-bar` in nativem SVG
+- Graph mit `line`, `area`, `smooth-area`, `bar`, `column`, `stepped`, `line-bar`, `smooth-line-bar` in nativem SVG
 - Graphpositionen `full`, `left`, `right`, `bottom`, `icon-area`, `custom`
-- Farbmodi `fixed`, `state`, `thresholds` (beliebig viele Grenzwerte, `current` oder `per-point`), `gradient`
+- Farbmodi `fixed`, `state`, `thresholds` (beliebig viele Grenzwerte, `current` oder `per-point`), `gradient`, `sign` (über/unter null)
 - Statusabhängiger Kartenhintergrund, Lesbarkeits-Overlay, Ebenenreihenfolge einstellbar
 - Eigene Zustandsregeln mit `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `regex`
 - Aktionen für Tap, Hold und Double-Tap; Maus, Touch und Tastatur werden unterstützt
@@ -281,6 +281,9 @@ value_2:
 | `thresholds` | `[]` | `[{value, color}, …]` für `thresholds`, beliebig viele Einträge |
 | `threshold_mode` | `current` | `current` oder `per-point` |
 | `gradient` | grün → rot, vertikal | `{from, to, direction: vertical \| horizontal}` |
+| `positive_color` | `#a855f7` | Farbe über `split_at` bei `color_mode: sign` |
+| `negative_color` | `#22c55e` | Farbe unter `split_at` bei `color_mode: sign` |
+| `split_at` | `0` | Grenze für `color_mode: sign` |
 | `update_interval` | `300` | Sekunden zwischen History-Abfragen (mindestens 10) |
 
 ### Statushintergrund, Ebenen, Grenzwerte, Layout
@@ -361,6 +364,7 @@ Die Karte verwendet außerdem die HA-Variablen `--ha-card-background`, `--card-b
 | --- | --- |
 | `line` | Linie, Lücken bei fehlenden Daten, einzelne Punkte als Kreis |
 | `area` | Linie mit gefüllter Fläche bis zur Nulllinie |
+| `smooth-area` | Abgerundete Linie mit Fläche bis zur Nulllinie. Die Fläche ist weit weg von null kräftig und wird zur Nulllinie hin durchsichtig (Energie-Optik). Standard `fill_opacity`: 0.6 |
 | `bar` | Balken je Zeitfenster mit `bar_gap`, `bar_width` und `bar_radius`; negative Werte wachsen nach unten |
 | `column` | Lückenlose Säulen (Histogramm-Optik) |
 | `stepped` | Stufenlinie mit Fläche, passend für Zustandswechsel |
@@ -425,6 +429,17 @@ graph:
 
 Bei `per-point` wird jeder Balken einzeln eingefärbt. Linien und Flächen erhalten Segmentfarben über einen horizontalen Verlauf mit harten Übergängen.
 
+**Über/Unter Null (`sign`).** Zum Beispiel für Netzbezug (positiv) und Einspeisung (negativ). Linie und Fläche wechseln die Farbe genau an der Nulllinie, auch mitten in einem Linienstück. Balken werden nach Vorzeichen eingefärbt.
+
+```yaml
+graph:
+  type: smooth-area
+  color_mode: sign
+  positive_color: "#a855f7"   # über 0: lila
+  negative_color: "#22c55e"   # unter 0: grün
+  split_at: 0                 # optional, andere Grenze
+```
+
 **Beliebig viele Farben je Wertebereich.** Jeder Eintrag gilt **ab** seinem Wert bis zum nächsthöheren Eintrag. Die Reihenfolge in der Liste ist egal, die Karte sortiert selbst:
 
 ```yaml
@@ -460,6 +475,7 @@ Vollständige Beispiele liegen in [`examples/`](examples/):
 - [`full-background-graph.yaml`](examples/full-background-graph.yaml): Flächengraph über die ganze Karte, Overlay, Graphfarbe nach Zustand
 - [`state-background.yaml`](examples/state-background.yaml): Statushintergrund und halbtransparenter Graph
 - [`threshold-colors.yaml`](examples/threshold-colors.yaml): 0 bis < 10 W grün, 10 bis < 100 W orange, ab 100 W rot; angewendet auf Symbol, Graph und Hintergrund
+- [`grid-power.yaml`](examples/grid-power.yaml): Netzbezug/Einspeisung als abgerundete Fläche, lila über und grün unter null
 
 ## Visueller Editor
 
@@ -467,7 +483,7 @@ Im Karteneditor stehen zur Verfügung:
 
 - **Entity, Name, Symbol** sowie **Werte** (Wert 1 und Wert 2)
 - **Graph:** aktivieren, Entity, Typ, Position, Zeitraum, weicher Übergang am Beginn und am Ende (Schieberegler)
-- **Graph-Farben:** Farbmodus wählen. Je nach Modus erscheinen eine feste Farbe, Farben für Ein/Aus, Verlauf von/bis oder die **Grenzwertliste**: Zeilen mit „Ab Wert“ und Farbe, beliebig viele über „Grenzwert hinzufügen“, Entfernen mit ✕. Beim ersten Wechsel auf „Nach Grenzwerten“ ist die Liste mit 10/50/100/200 vorbelegt.
+- **Graph-Farben:** Farbmodus wählen. Je nach Modus erscheinen eine feste Farbe, Farben für Ein/Aus, Verlauf von/bis, Farben über/unter null oder die **Grenzwertliste**: Zeilen mit „Ab Wert“ und Farbe, beliebig viele über „Grenzwert hinzufügen“, Entfernen mit ✕. Beim ersten Wechsel auf „Nach Grenzwerten“ ist die Liste mit 10/50/100/200 vorbelegt.
 - **Farben & Hintergrund:** Symbolfarben und Statushintergrund für Ein/Aus
 - **Interaktionen:** Tap, Hold, Double-Tap
 
@@ -501,7 +517,7 @@ Cache-Schlüssel: Entity-ID, Attribut, Startzeit, Endzeit, Zeitraum (`hours_to_s
 `setConfig()` prüft die Konfiguration und zeigt **alle** Fehler gesammelt direkt in der Karte an, statt eine unbehandelte Ausnahme zu werfen. Zum Beispiel:
 
 - `„entity“ fehlt …`
-- `graph.type „pie“ ist ungültig. Erlaubt: line, area, bar, column, stepped, line-bar, smooth-line-bar.`
+- `graph.type „pie“ ist ungültig. Erlaubt: line, area, smooth-area, bar, column, stepped, line-bar, smooth-line-bar.`
 - `graph.hours_to_show muss größer als 0 sein.`
 - `graph.position „top“ ist unbekannt …`
 - `graph.thresholds[0].value muss eine Zahl sein.`

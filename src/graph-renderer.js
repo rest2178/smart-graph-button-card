@@ -7,9 +7,10 @@
 
 import { escapeHtml, isDisplayable } from "./utils.js";
 
-export const GRAPH_TYPES = ["line", "area", "bar", "column", "stepped", "line-bar", "smooth-line-bar"];
+export const GRAPH_TYPES = ["line", "area", "smooth-area", "bar", "column", "stepped", "line-bar", "smooth-line-bar"];
 
 const r2 = (n) => Math.round(n * 100) / 100;
+const r4 = (n) => Math.round(n * 10000) / 10000;
 
 /**
  * Compute the y-axis range.
@@ -98,7 +99,8 @@ export function smoothPath(pts) {
  * @param {object} o
  * @param {Array<{v:number|null}>} o.data        reduced buckets
  * @param {number} o.width, o.height              pixel size of the drawing area
- * @param {string} o.type                         line|area|bar|column|stepped|line-bar|smooth-line-bar
+ * @param {string} o.type                         line|area|smooth-area|bar|column|stepped|line-bar|smooth-line-bar
+ * @param {{above:string,below:string,at?:number}} [o.sign] one color above, one below a value (default 0)
  * @param {string} o.color                        base color (already resolved)
  * @param {(v:number)=>string|null} [o.pointColor] per-point color function (thresholds per-point)
  * @param {{from:string,to:string,direction:string}} [o.gradient]
@@ -116,7 +118,8 @@ export function renderGraphSVG(o) {
   const lineWidth = Math.max(0, Number(o.lineWidth ?? 2));
   const lineBar = type === "line-bar" || type === "smooth-line-bar";
   const barish = type === "bar" || type === "column" || lineBar;
-  const filled = type === "area" || type === "stepped" || barish;
+  const smoothArea = type === "smooth-area";
+  const filled = type === "area" || smoothArea || type === "stepped" || barish;
   const scale = computeScale(values, { min: o.min, max: o.max, includeZero: filled });
 
   const padTop = type === "bar" || type === "column" ? 0 : Math.ceil(lineWidth / 2) + (o.showPoints ? 2 : 0);
@@ -178,6 +181,26 @@ export function renderGraphSVG(o) {
     linePaint = `url(#${id}-pp)`;
   }
 
+  // Sign mode: one color above and one below the split value (default 0).
+  // A vertical hard-stop gradient switches exactly at the split line, even
+  // in the middle of a line segment.
+  let signInfo = null;
+  if (o.sign && isDisplayable(o.sign.above) && isDisplayable(o.sign.below)) {
+    const at = Number(o.sign.at);
+    const split = Number.isFinite(at) ? at : 0;
+    const f = Math.min(1, Math.max(0, yOf(split) / height));
+    signInfo = { split, f, above: String(o.sign.above), below: String(o.sign.below) };
+    const a = escapeHtml(signInfo.above);
+    const b = escapeHtml(signInfo.below);
+    defs.push(
+      `<linearGradient id="${id}-sign" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${height}">` +
+        `<stop offset="0" style="stop-color:${a}"/><stop offset="${r4(f)}" style="stop-color:${a}"/>` +
+        `<stop offset="${r4(f)}" style="stop-color:${b}"/><stop offset="1" style="stop-color:${b}"/></linearGradient>`
+    );
+    paint = `url(#${id}-sign)`;
+    linePaint = paint;
+  }
+
   // Grid & axis
   if (o.showGrid) {
     for (const f of [0.25, 0.5, 0.75]) {
@@ -206,7 +229,7 @@ export function renderGraphSVG(o) {
       }
       if (h <= 0) return;
       const x = i * bucketW + (bucketW - barW) / 2;
-      const fill = perPoint ? escapeHtml(colorAt(v)) : paint;
+      const fill = perPoint ? escapeHtml(colorAt(v)) : signInfo ? escapeHtml(v >= signInfo.split ? signInfo.above : signInfo.below) : paint;
       body.push(
         `<rect class="bar" x="${r2(x)}" y="${r2(top)}" width="${r2(barW)}" height="${r2(h)}"${radius ? ` rx="${r2(radius)}"` : ""} style="fill:${fill}"${barOpacity < 1 ? ` fill-opacity="${r2(barOpacity)}"` : ""}/>`
       );
@@ -214,7 +237,33 @@ export function renderGraphSVG(o) {
   }
 
   // Lines / areas / steps
-  if (type === "line" || type === "area" || type === "stepped" || lineBar) {
+  // smooth-area: fill fades from full strength (far from zero) to almost
+  // transparent at the zero line, in the line color(s).
+  let areaFill = linePaint;
+  let areaOpacity = fillOpacity;
+  if (smoothArea && !perPoint && !(o.gradient && isDisplayable(o.gradient.from))) {
+    const fBase = yBase / height;
+    const minOp = 0.04;
+    const op = (f) => {
+      if (f <= fBase) return fBase <= 0 ? minOp : fillOpacity + (minOp - fillOpacity) * (f / fBase);
+      return fBase >= 1 ? minOp : minOp + (fillOpacity - minOp) * ((f - fBase) / (1 - fBase));
+    };
+    const top = signInfo ? signInfo.above : color;
+    const bottom = signInfo ? signInfo.below : color;
+    const entries = [{ o: 0, r: 1 }, { o: fBase, r: 1 }, { o: 1, r: 1 }];
+    if (signInfo) entries.push({ o: signInfo.f, r: 0 }, { o: signInfo.f, r: 2 });
+    entries.sort((x, y) => x.o - y.o || x.r - y.r);
+    const stops = entries.map((e) => {
+      let c = top;
+      if (signInfo) c = e.r === 0 ? top : e.r === 2 ? bottom : e.o < signInfo.f ? top : bottom;
+      return `<stop offset="${r4(e.o)}" style="stop-color:${escapeHtml(c)};stop-opacity:${r2(op(e.o))}"/>`;
+    });
+    defs.push(`<linearGradient id="${id}-afill" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${height}">${stops.join("")}</linearGradient>`);
+    areaFill = `url(#${id}-afill)`;
+    areaOpacity = 1;
+  }
+
+  if (type === "line" || type === "area" || smoothArea || type === "stepped" || lineBar) {
     const runs = runsOf(values);
     const linePaths = [];
     const areaPaths = [];
@@ -238,12 +287,12 @@ export function renderGraphSVG(o) {
         continue;
       }
       const pts = n === 1 ? [[0, yOf(values[0])], [width, yOf(values[0])]] : run.map((i) => [xLine(i), yOf(values[i])]);
-      const d = type === "smooth-line-bar" ? smoothPath(pts) : pts.map((p, k) => `${k ? "L" : "M"}${r2(p[0])},${r2(p[1])}`).join("");
+      const d = type === "smooth-line-bar" || smoothArea ? smoothPath(pts) : pts.map((p, k) => `${k ? "L" : "M"}${r2(p[0])},${r2(p[1])}`).join("");
       linePaths.push(d);
       areaPaths.push(`${d}L${r2(pts[pts.length - 1][0])},${r2(yBase)}L${r2(pts[0][0])},${r2(yBase)}Z`);
     }
-    if (type === "area" || type === "stepped") {
-      for (const d of areaPaths) body.push(`<path class="area" d="${d}" style="fill:${linePaint}" fill-opacity="${r2(fillOpacity)}" stroke="none"/>`);
+    if (type === "area" || type === "stepped" || smoothArea) {
+      for (const d of areaPaths) body.push(`<path class="area" d="${d}" style="fill:${areaFill}" fill-opacity="${r2(areaOpacity)}" stroke="none"/>`);
     }
     if (lineWidth > 0) {
       for (const d of linePaths) {
