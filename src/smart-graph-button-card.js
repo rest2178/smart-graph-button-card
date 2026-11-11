@@ -17,7 +17,7 @@ import { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx } from "./uti
 import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
 
 export const CARD_TAG = "smart-graph-button-card";
-export const CARD_VERSION = "1.1.0";
+export const CARD_VERSION = "1.2.0";
 
 let instanceCounter = 0;
 
@@ -455,6 +455,12 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (userSet(raw, "graph.opacity")) setVar("--sgbc-graph-opacity", c.graph.opacity);
     if (c.graph.position === "left" || c.graph.position === "right") setVar("--sgbc-graph-width", c.graph.width);
     if (c.graph.position === "bottom") setVar("--sgbc-graph-height", c.graph.height);
+    if (parseFloat(c.graph.fade_start) > 0 || parseFloat(c.graph.fade_end) > 0) {
+      graph.classList.add("fade");
+      if (iconGraph) iconGraph.classList.add("fade");
+      setVar("--sgbc-fade-start", c.graph.fade_start);
+      setVar("--sgbc-fade-end", c.graph.fade_end);
+    }
     if (c.graph.position === "custom") {
       setVar("--sgbc-graph-left", c.graph.bounds.left);
       setVar("--sgbc-graph-top", c.graph.bounds.top);

@@ -65,3 +65,12 @@ test("all spec examples validate", async () => {
     }
   }
 });
+
+test("graph fade: numbers are percent, shorthand + override, limits", () => {
+  const c = validateConfig({ entity: "sensor.p", graph: { fade: 15, fade_end: "40px" } });
+  assert.equal(c.graph.fade_start, "15%");
+  assert.equal(c.graph.fade_end, "40px");
+  assert.equal(validateConfig({ entity: "sensor.p", graph: {} }).graph.fade_start, "0%");
+  throwsWith({ entity: "sensor.p", graph: { fade_start: 80 } }, /höchstens 50/);
+  throwsWith({ entity: "sensor.p", graph: { fade_end: "weich" } }, /fade_end/);
+});

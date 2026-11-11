@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.1.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.2.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -71,6 +71,20 @@ ha-card.sgbc.auto-height { height: auto; min-height: 48px; }
   border-radius: 0;
 }
 .graph.pos-icon-area, .graph.hidden { display: none; }
+/* soft fade of the graph start (left) and end (right) into the background */
+.graph.fade, .icon-graph.fade {
+  --sgbc-fade-mask: linear-gradient(to right,
+    transparent 0,
+    rgba(0, 0, 0, 0.12) calc(var(--sgbc-fade-start, 0%) * 0.3),
+    rgba(0, 0, 0, 0.5) calc(var(--sgbc-fade-start, 0%) * 0.6),
+    #000 var(--sgbc-fade-start, 0%),
+    #000 calc(100% - var(--sgbc-fade-end, 0%)),
+    rgba(0, 0, 0, 0.5) calc(100% - var(--sgbc-fade-end, 0%) * 0.6),
+    rgba(0, 0, 0, 0.12) calc(100% - var(--sgbc-fade-end, 0%) * 0.3),
+    transparent 100%);
+  -webkit-mask-image: var(--sgbc-fade-mask);
+  mask-image: var(--sgbc-fade-mask);
+}
 
 .overlay { z-index: 3; background: var(--sgbc-overlay-color, transparent); }
 .overlay.hidden { display: none; }
@@ -2038,6 +2052,9 @@ const DEFAULTS = Object.freeze({
     show_grid: false,
     show_axis: false,
     show_labels: false,
+    fade: undefined,
+    fade_start: undefined,
+    fade_end: undefined,
     color_mode: "state",
     color: "var(--sgbc-graph-color, var(--primary-color, #03a9f4))",
     colors: {
@@ -2329,6 +2346,27 @@ function normalizeTopThresholds(input, err) {
   return t;
 }
 
+/**
+ * Width of the soft fade at the start/end of the graph.
+ * Number = percent of the graph width (0–50), or a string like "15%" / "40px".
+ */
+function fadeLength(value, path, err) {
+  if (value === undefined || value === null || value === false) return "0%";
+  const s = String(value).trim();
+  const m = /^(\d*\.?\d+)(%|px)?$/.exec(s);
+  if (!m) {
+    err(`${path} „${value}“ ist ungültig (z. B. 15, 15% oder 40px).`);
+    return "0%";
+  }
+  const n = Number(m[1]);
+  const unit = m[2] || "%";
+  if (unit === "%" && n > 50) {
+    err(`${path} darf höchstens 50 (%) sein.`);
+    return "0%";
+  }
+  return `${n}${unit}`;
+}
+
 function normalizeGraph(rawGraph, c, err) {
   const g = isPlainObject(c.graph) ? c.graph : deepClone(DEFAULTS.graph);
   if (rawGraph === undefined || rawGraph === null || rawGraph === false) {
@@ -2388,6 +2426,8 @@ function normalizeGraph(rawGraph, c, err) {
     else g.bar_width = n;
   }
 
+  g.fade_start = fadeLength(g.fade_start ?? g.fade, "graph.fade_start", err);
+  g.fade_end = fadeLength(g.fade_end ?? g.fade, "graph.fade_end", err);
   g.width = cssLen(g.width, "graph.width", err);
   g.height = cssLen(g.height, "graph.height", err);
   if (g.position === "custom") {
@@ -2407,7 +2447,7 @@ function normalizeGraph(rawGraph, c, err) {
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }
-return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, ConfigError, DEFAULTS, validateConfig };
+return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, ConfigError, DEFAULTS, validateConfig, fadeLength };
 })();
 
 // ---- src/color-utils.js
@@ -2541,6 +2581,8 @@ const LABELS = {
   graph_type: "Graph-Typ",
   graph_position: "Graph-Position",
   graph_hours_to_show: "Zeitraum (Stunden)",
+  graph_fade_start: "Weicher Übergang am Beginn (links)",
+  graph_fade_end: "Weicher Übergang am Ende (rechts)",
   graph_color_mode: "Farbmodus",
   graph_threshold_mode: "Anwendung",
   graph_gradient_direction: "Richtung",
@@ -2603,6 +2645,8 @@ function mainSchema() {
           ],
         },
         { name: "graph_hours_to_show", selector: { number: { min: 1, max: 168, step: 1, mode: "box", unit_of_measurement: "h" } } },
+        { name: "graph_fade_start", selector: { number: { min: 0, max: 50, step: 1, mode: "slider", unit_of_measurement: "%" } } },
+        { name: "graph_fade_end", selector: { number: { min: 0, max: 50, step: 1, mode: "slider", unit_of_measurement: "%" } } },
       ],
     },
   ];
@@ -2659,6 +2703,13 @@ function pruneEmpty(obj, path) {
 
 const clone = (v) => JSON.parse(JSON.stringify(v ?? {}));
 
+/** Fade value as percent number for the slider (px values are left to YAML). */
+function fadePercent(value) {
+  if (value === undefined || value === null || value === false) return 0;
+  const m = /^(\d*\.?\d+)%?$/.exec(String(value).trim());
+  return m ? Number(m[1]) : undefined;
+}
+
 /** Map a (YAML) config to the flat data object used by ha-form. */
 function configToForm(config) {
   const c = config || {};
@@ -2678,6 +2729,8 @@ function configToForm(config) {
     graph_type: get(c, "graph.type") || "line",
     graph_position: get(c, "graph.position") || "full",
     graph_hours_to_show: get(c, "graph.hours_to_show") ?? 24,
+    graph_fade_start: fadePercent(get(c, "graph.fade_start") ?? get(c, "graph.fade")),
+    graph_fade_end: fadePercent(get(c, "graph.fade_end") ?? get(c, "graph.fade")),
     graph_color_mode: get(c, "graph.color_mode") || "state",
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
@@ -2718,6 +2771,10 @@ function formToConfig(config, form) {
       setPath(out, "graph.type", d.graph_type);
       setPath(out, "graph.position", d.graph_position);
       setPath(out, "graph.hours_to_show", typeof d.graph_hours_to_show === "number" ? d.graph_hours_to_show : undefined);
+      for (const [field, key] of [["graph_fade_start", "fade_start"], ["graph_fade_end", "fade_end"]]) {
+        const current = fadePercent(get(config, `graph.${key}`) ?? get(config, "graph.fade"));
+        if (typeof d[field] === "number" && d[field] !== current) out.graph[key] = d[field];
+      }
     }
     const mode = d.graph_color_mode;
     if (mode && (mode !== "state" || out.graph.color_mode)) out.graph.color_mode = mode;
@@ -3163,7 +3220,7 @@ const { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx } = __m_utils_
 const { EDITOR_TAG } = __m_smart_graph_button_card_editor_js;
 
 const CARD_TAG = "smart-graph-button-card";
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
 
 let instanceCounter = 0;
 
@@ -3601,6 +3658,12 @@ class SmartGraphButtonCard extends HTMLElement {
     if (userSet(raw, "graph.opacity")) setVar("--sgbc-graph-opacity", c.graph.opacity);
     if (c.graph.position === "left" || c.graph.position === "right") setVar("--sgbc-graph-width", c.graph.width);
     if (c.graph.position === "bottom") setVar("--sgbc-graph-height", c.graph.height);
+    if (parseFloat(c.graph.fade_start) > 0 || parseFloat(c.graph.fade_end) > 0) {
+      graph.classList.add("fade");
+      if (iconGraph) iconGraph.classList.add("fade");
+      setVar("--sgbc-fade-start", c.graph.fade_start);
+      setVar("--sgbc-fade-end", c.graph.fade_end);
+    }
     if (c.graph.position === "custom") {
       setVar("--sgbc-graph-left", c.graph.bounds.left);
       setVar("--sgbc-graph-top", c.graph.bounds.top);

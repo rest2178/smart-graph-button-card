@@ -67,6 +67,20 @@ ha-card.sgbc.auto-height { height: auto; min-height: 48px; }
   border-radius: 0;
 }
 .graph.pos-icon-area, .graph.hidden { display: none; }
+/* soft fade of the graph start (left) and end (right) into the background */
+.graph.fade, .icon-graph.fade {
+  --sgbc-fade-mask: linear-gradient(to right,
+    transparent 0,
+    rgba(0, 0, 0, 0.12) calc(var(--sgbc-fade-start, 0%) * 0.3),
+    rgba(0, 0, 0, 0.5) calc(var(--sgbc-fade-start, 0%) * 0.6),
+    #000 var(--sgbc-fade-start, 0%),
+    #000 calc(100% - var(--sgbc-fade-end, 0%)),
+    rgba(0, 0, 0, 0.5) calc(100% - var(--sgbc-fade-end, 0%) * 0.6),
+    rgba(0, 0, 0, 0.12) calc(100% - var(--sgbc-fade-end, 0%) * 0.3),
+    transparent 100%);
+  -webkit-mask-image: var(--sgbc-fade-mask);
+  mask-image: var(--sgbc-fade-mask);
+}
 
 .overlay { z-index: 3; background: var(--sgbc-overlay-color, transparent); }
 .overlay.hidden { display: none; }

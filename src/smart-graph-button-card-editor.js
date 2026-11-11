@@ -68,6 +68,8 @@ const LABELS = {
   graph_type: "Graph-Typ",
   graph_position: "Graph-Position",
   graph_hours_to_show: "Zeitraum (Stunden)",
+  graph_fade_start: "Weicher Übergang am Beginn (links)",
+  graph_fade_end: "Weicher Übergang am Ende (rechts)",
   graph_color_mode: "Farbmodus",
   graph_threshold_mode: "Anwendung",
   graph_gradient_direction: "Richtung",
@@ -130,6 +132,8 @@ function mainSchema() {
           ],
         },
         { name: "graph_hours_to_show", selector: { number: { min: 1, max: 168, step: 1, mode: "box", unit_of_measurement: "h" } } },
+        { name: "graph_fade_start", selector: { number: { min: 0, max: 50, step: 1, mode: "slider", unit_of_measurement: "%" } } },
+        { name: "graph_fade_end", selector: { number: { min: 0, max: 50, step: 1, mode: "slider", unit_of_measurement: "%" } } },
       ],
     },
   ];
@@ -186,6 +190,13 @@ export function pruneEmpty(obj, path) {
 
 const clone = (v) => JSON.parse(JSON.stringify(v ?? {}));
 
+/** Fade value as percent number for the slider (px values are left to YAML). */
+function fadePercent(value) {
+  if (value === undefined || value === null || value === false) return 0;
+  const m = /^(\d*\.?\d+)%?$/.exec(String(value).trim());
+  return m ? Number(m[1]) : undefined;
+}
+
 /** Map a (YAML) config to the flat data object used by ha-form. */
 export function configToForm(config) {
   const c = config || {};
@@ -205,6 +216,8 @@ export function configToForm(config) {
     graph_type: get(c, "graph.type") || "line",
     graph_position: get(c, "graph.position") || "full",
     graph_hours_to_show: get(c, "graph.hours_to_show") ?? 24,
+    graph_fade_start: fadePercent(get(c, "graph.fade_start") ?? get(c, "graph.fade")),
+    graph_fade_end: fadePercent(get(c, "graph.fade_end") ?? get(c, "graph.fade")),
     graph_color_mode: get(c, "graph.color_mode") || "state",
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
@@ -245,6 +258,10 @@ export function formToConfig(config, form) {
       setPath(out, "graph.type", d.graph_type);
       setPath(out, "graph.position", d.graph_position);
       setPath(out, "graph.hours_to_show", typeof d.graph_hours_to_show === "number" ? d.graph_hours_to_show : undefined);
+      for (const [field, key] of [["graph_fade_start", "fade_start"], ["graph_fade_end", "fade_end"]]) {
+        const current = fadePercent(get(config, `graph.${key}`) ?? get(config, "graph.fade"));
+        if (typeof d[field] === "number" && d[field] !== current) out.graph[key] = d[field];
+      }
     }
     const mode = d.graph_color_mode;
     if (mode && (mode !== "state" || out.graph.color_mode)) out.graph.color_mode = mode;

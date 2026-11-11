@@ -54,3 +54,14 @@ test("graph stays disabled when only the color mode changes", () => {
   const off = { entity: "switch.a", graph: { enabled: false } };
   assert.equal(formToConfig(off, { ...configToForm(off), graph_color_mode: "fixed" }).graph.enabled, false);
 });
+
+test("editor fade sliders map to graph.fade_start / fade_end without rewriting unchanged values", () => {
+  const cfg = { entity: "switch.a", graph: { entity: "sensor.p", fade: 20 } };
+  const form = configToForm(cfg);
+  assert.equal(form.graph_fade_start, 20);
+  assert.equal(form.graph_fade_end, 20);
+  const same = formToConfig(cfg, form);
+  assert.equal(same.graph.fade_start, undefined, "unchanged value not written");
+  const changed = formToConfig(cfg, { ...form, graph_fade_end: 0 });
+  assert.equal(changed.graph.fade_end, 0);
+});

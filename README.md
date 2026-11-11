@@ -272,6 +272,9 @@ value_2:
 | `opacity` | `0.6` | Deckkraft der gesamten Graph-Ebene |
 | `fill_opacity` | `0.25` | Deckkraft der Fläche (`area`, `stepped`, Balken bei `line-bar`) |
 | `show_points` / `show_grid` / `show_axis` / `show_labels` | `false` | Punkte, Hilfslinien, Nulllinie, Min/Max-Beschriftung |
+| `fade` | `0` | Weicher Übergang an Beginn **und** Ende (Kurzform für beide) |
+| `fade_start` | `fade` | Weicher Übergang am Beginn (links, ältere Werte): Zahl = % der Graphbreite (0–50), oder `"15%"` / `"40px"` |
+| `fade_end` | `fade` | Weicher Übergang am Ende (rechts, aktuelle Werte), gleiche Angaben wie `fade_start` |
 | `color_mode` | `state` | siehe [Farbmodi](#farbmodi) |
 | `color` | `var(--sgbc-graph-color)` | Farbe für `fixed` und Rückfallfarbe |
 | `colors` | HA-Variablen | Map je Zustand für `state` |
@@ -379,6 +382,21 @@ Skalierung: automatisch oder manuell (`min`/`max`). Bei konstanten Werten wird s
 
 Der Graph wird immer innerhalb der Karte beschnitten: per `overflow: hidden` mit Border-Radius und zusätzlich per SVG-`clipPath`.
 
+## Weicher Übergang an den Rändern
+
+Mit `fade_start` und `fade_end` läuft der Graph an Anfang und Ende sanft in den Kartenhintergrund aus, statt hart abgeschnitten zu werden. Der Wert legt fest, wie breit die Übergangszone ist: je größer, desto weicher.
+
+```yaml
+graph:
+  fade_start: 25    # linke 25 % der Graphbreite blenden weich ein
+  fade_end: 10      # rechte 10 % blenden weich aus
+# oder für beide Seiten gleich:
+graph:
+  fade: 15
+```
+
+Das Ausblenden ist eine CSS-Maske. Es wirkt bei allen Graph-Typen, Positionen und Themes und kostet keine Rechenleistung. Im Editor gibt es dafür zwei Schieberegler im Bereich „Graph“.
+
 ## Farbmodi
 
 ```yaml
@@ -448,7 +466,7 @@ Vollständige Beispiele liegen in [`examples/`](examples/):
 Im Karteneditor stehen zur Verfügung:
 
 - **Entity, Name, Symbol** sowie **Werte** (Wert 1 und Wert 2)
-- **Graph:** aktivieren, Entity, Typ, Position, Zeitraum
+- **Graph:** aktivieren, Entity, Typ, Position, Zeitraum, weicher Übergang am Beginn und am Ende (Schieberegler)
 - **Graph-Farben:** Farbmodus wählen. Je nach Modus erscheinen eine feste Farbe, Farben für Ein/Aus, Verlauf von/bis oder die **Grenzwertliste**: Zeilen mit „Ab Wert“ und Farbe, beliebig viele über „Grenzwert hinzufügen“, Entfernen mit ✕. Beim ersten Wechsel auf „Nach Grenzwerten“ ist die Liste mit 10/50/100/200 vorbelegt.
 - **Farben & Hintergrund:** Symbolfarben und Statushintergrund für Ein/Aus
 - **Interaktionen:** Tap, Hold, Double-Tap

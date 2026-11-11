@@ -105,6 +105,9 @@ export const DEFAULTS = Object.freeze({
     show_grid: false,
     show_axis: false,
     show_labels: false,
+    fade: undefined,
+    fade_start: undefined,
+    fade_end: undefined,
     color_mode: "state",
     color: "var(--sgbc-graph-color, var(--primary-color, #03a9f4))",
     colors: {
@@ -396,6 +399,27 @@ function normalizeTopThresholds(input, err) {
   return t;
 }
 
+/**
+ * Width of the soft fade at the start/end of the graph.
+ * Number = percent of the graph width (0–50), or a string like "15%" / "40px".
+ */
+export function fadeLength(value, path, err) {
+  if (value === undefined || value === null || value === false) return "0%";
+  const s = String(value).trim();
+  const m = /^(\d*\.?\d+)(%|px)?$/.exec(s);
+  if (!m) {
+    err(`${path} „${value}“ ist ungültig (z. B. 15, 15% oder 40px).`);
+    return "0%";
+  }
+  const n = Number(m[1]);
+  const unit = m[2] || "%";
+  if (unit === "%" && n > 50) {
+    err(`${path} darf höchstens 50 (%) sein.`);
+    return "0%";
+  }
+  return `${n}${unit}`;
+}
+
 function normalizeGraph(rawGraph, c, err) {
   const g = isPlainObject(c.graph) ? c.graph : deepClone(DEFAULTS.graph);
   if (rawGraph === undefined || rawGraph === null || rawGraph === false) {
@@ -455,6 +479,8 @@ function normalizeGraph(rawGraph, c, err) {
     else g.bar_width = n;
   }
 
+  g.fade_start = fadeLength(g.fade_start ?? g.fade, "graph.fade_start", err);
+  g.fade_end = fadeLength(g.fade_end ?? g.fade, "graph.fade_end", err);
   g.width = cssLen(g.width, "graph.width", err);
   g.height = cssLen(g.height, "graph.height", err);
   if (g.position === "custom") {
