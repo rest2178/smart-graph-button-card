@@ -1,0 +1,60 @@
+# Example 2 – area graph across the whole card, readability overlay,
+# state-dependent graph color, two values
+type: custom:smart-graph-button-card
+entity: switch.waschmaschine
+name: Waschmaschine
+icon: mdi:washing-machine
+value_1:
+  type: state
+  state_mapping:
+    "on": Läuft
+    "off": Aus
+value_2:
+  entity: sensor.waschmaschine_power
+  label: Leistung
+  decimals: 0
+  unit: W
+  icon: mdi:flash
+values:
+  layout: inline
+  separator: " · "
+name_style:
+  font_size: 15px
+  font_weight: 700
+  color: var(--primary-text-color)
+icon_area:
+  shape: rounded-square
+  animation:
+    "on": pulse
+    "off": none
+    duration: 2s
+graph:
+  enabled: true
+  entity: sensor.waschmaschine_power
+  type: area
+  position: full
+  hours_to_show: 12
+  max_points: 96
+  aggregation: max
+  line_width: 1.5
+  fill_opacity: 0.3
+  opacity: 0.5
+  min: 0
+  color_mode: state
+  colors:
+    "on": "#3b82f6"
+    "off": "#94a3b8"
+    unavailable: "#6b7280"
+  update_interval: 120
+layers:
+  graph_above_state_background: true
+  overlay:
+    enabled: true
+    color: "rgba(0, 0, 0, 0.06)"
+layout:
+  height: 72px
+tap_action:
+  action: more-info
+hold_action:
+  action: more-info
+  entity: sensor.waschmaschine_power

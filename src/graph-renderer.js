@@ -1,0 +1,257 @@
+/**
+ * Native SVG graph renderer. Produces an SVG markup string from reduced data.
+ * All dynamic values are numbers or escaped strings – no injection possible.
+ *
+ * Pure module – no DOM access.
+ */
+
+import { escapeHtml, isDisplayable } from "./utils.js";
+
+export const GRAPH_TYPES = ["line", "area", "bar", "column", "stepped", "line-bar"];
+
+const r2 = (n) => Math.round(n * 100) / 100;
+
+/**
+ * Compute the y-axis range.
+ * - manual min/max win (numbers), "auto" otherwise
+ * - constant values get a symmetric padding
+ * - bar-like graphs include the zero baseline when auto
+ */
+export function computeScale(values, { min = "auto", max = "auto", includeZero = false } = {}) {
+  const finite = values.filter((v) => Number.isFinite(v));
+  const manualMin = typeof min === "number" && Number.isFinite(min);
+  const manualMax = typeof max === "number" && Number.isFinite(max);
+  let lo = manualMin ? min : finite.length ? Math.min(...finite) : 0;
+  let hi = manualMax ? max : finite.length ? Math.max(...finite) : 1;
+  if (includeZero) {
+    if (!manualMin && lo > 0) lo = 0;
+    if (!manualMax && hi < 0) hi = 0;
+  }
+  if (hi < lo) {
+    if (manualMin && !manualMax) hi = lo;
+    else if (manualMax && !manualMin) lo = hi;
+    else [lo, hi] = [hi, lo];
+  }
+  if (hi === lo) {
+    const pad = lo === 0 ? 1 : Math.abs(lo) * 0.1;
+    if (manualMin && !manualMax) hi = lo + pad;
+    else if (manualMax && !manualMin) lo = hi - pad;
+    else if (!manualMin && !manualMax) {
+      lo -= pad;
+      hi += pad;
+    } else hi = lo + 1;
+  } else if (!manualMax) {
+    hi += (hi - lo) * 0.05; // small headroom
+  }
+  return { min: lo, max: hi };
+}
+
+/** Split indices into runs of consecutive non-null values. */
+function runsOf(values) {
+  const runs = [];
+  let cur = null;
+  values.forEach((v, i) => {
+    if (Number.isFinite(v)) {
+      if (!cur) {
+        cur = [];
+        runs.push(cur);
+      }
+      cur.push(i);
+    } else cur = null;
+  });
+  return runs;
+}
+
+/**
+ * Render the graph.
+ *
+ * @param {object} o
+ * @param {Array<{v:number|null}>} o.data        reduced buckets
+ * @param {number} o.width, o.height              pixel size of the drawing area
+ * @param {string} o.type                         line|area|bar|column|stepped|line-bar
+ * @param {string} o.color                        base color (already resolved)
+ * @param {(v:number)=>string|null} [o.pointColor] per-point color function (thresholds per-point)
+ * @param {{from:string,to:string,direction:string}} [o.gradient]
+ * @returns {string} SVG markup or "" when nothing can be drawn
+ */
+export function renderGraphSVG(o) {
+  const width = Math.max(0, Math.floor(o.width || 0));
+  const height = Math.max(0, Math.floor(o.height || 0));
+  const data = Array.isArray(o.data) ? o.data : [];
+  const values = data.map((d) => (d && Number.isFinite(d.v) ? d.v : null));
+  if (!width || !height || !values.some((v) => v !== null)) return "";
+
+  const type = GRAPH_TYPES.includes(o.type) ? o.type : "line";
+  const id = String(o.idPrefix || "sgbc").replace(/[^a-zA-Z0-9_-]/g, "");
+  const lineWidth = Math.max(0, Number(o.lineWidth ?? 2));
+  const barish = type === "bar" || type === "column" || type === "line-bar";
+  const filled = type === "area" || type === "stepped" || barish;
+  const scale = computeScale(values, { min: o.min, max: o.max, includeZero: filled });
+
+  const padTop = type === "bar" || type === "column" ? 0 : Math.ceil(lineWidth / 2) + (o.showPoints ? 2 : 0);
+  const padBottom = type === "bar" || type === "column" ? 0 : Math.ceil(lineWidth / 2);
+  const plotH = Math.max(1, height - padTop - padBottom);
+  const span = scale.max - scale.min || 1;
+  const yOf = (v) => {
+    const clamped = Math.min(scale.max, Math.max(scale.min, v));
+    return padTop + ((scale.max - clamped) / span) * plotH;
+  };
+  const baseValue = Math.min(scale.max, Math.max(scale.min, 0));
+  const yBase = yOf(baseValue);
+  const n = values.length;
+  const bucketW = width / n;
+  const xLine = (i) => (n === 1 ? width / 2 : (i / (n - 1)) * width);
+
+  const color = isDisplayable(o.color) ? String(o.color) : "var(--sgbc-graph-color, var(--primary-color, #03a9f4))";
+  const defs = [];
+  const body = [];
+  let paint = escapeHtml(color);
+
+  // Gradient color mode
+  if (o.gradient && isDisplayable(o.gradient.from) && isDisplayable(o.gradient.to)) {
+    const horizontal = o.gradient.direction === "horizontal";
+    defs.push(
+      `<linearGradient id="${id}-grad" gradientUnits="userSpaceOnUse" x1="0" y1="${horizontal ? 0 : height}" x2="${horizontal ? width : 0}" y2="0">` +
+        `<stop offset="0" style="stop-color:${escapeHtml(o.gradient.from)}"/>` +
+        `<stop offset="1" style="stop-color:${escapeHtml(o.gradient.to)}"/></linearGradient>`
+    );
+    paint = `url(#${id}-grad)`;
+  }
+
+  // Per-point colors for line-like paths: horizontal hard-stop gradient
+  const perPoint = typeof o.pointColor === "function";
+  const colorAt = (v) => {
+    const c = perPoint && v !== null ? o.pointColor(v) : null;
+    return isDisplayable(c) ? String(c) : color;
+  };
+  let linePaint = paint;
+  if (perPoint && !barish) {
+    const stops = [];
+    let prev = color;
+    values.forEach((v, i) => {
+      const c = v === null ? prev : colorAt(v);
+      prev = c;
+      let from;
+      let to;
+      if (type === "stepped") {
+        from = i / n;
+        to = (i + 1) / n;
+      } else {
+        from = n === 1 ? 0 : Math.max(0, (i - 0.5) / (n - 1));
+        to = n === 1 ? 1 : Math.min(1, (i + 0.5) / (n - 1));
+      }
+      stops.push(`<stop offset="${r2(from)}" style="stop-color:${escapeHtml(c)}"/>`, `<stop offset="${r2(to)}" style="stop-color:${escapeHtml(c)}"/>`);
+    });
+    defs.push(`<linearGradient id="${id}-pp" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${width}" y2="0">${stops.join("")}</linearGradient>`);
+    linePaint = `url(#${id}-pp)`;
+  }
+
+  // Grid & axis
+  if (o.showGrid) {
+    for (const f of [0.25, 0.5, 0.75]) {
+      const y = r2(padTop + plotH * f);
+      body.push(`<line class="grid" x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="currentColor" stroke-opacity="0.12" stroke-width="1" shape-rendering="crispEdges"/>`);
+    }
+  }
+
+  const fillOpacity = Math.min(1, Math.max(0, Number(o.fillOpacity ?? 0.25)));
+
+  // Bars
+  if (barish) {
+    const gap = type === "column" ? 0 : Math.max(0, Number(o.barGap ?? 2));
+    const requested = Number(o.barWidth);
+    const barW = Math.max(1, Number.isFinite(requested) && requested > 0 ? Math.min(requested, bucketW) : bucketW - gap);
+    const radius = type === "column" ? 0 : Math.max(0, Math.min(Number(o.barRadius ?? 1), barW / 2));
+    const barOpacity = type === "line-bar" ? Math.max(fillOpacity, 0.35) : 1;
+    values.forEach((v, i) => {
+      if (v === null) return;
+      const y = yOf(v);
+      let top = Math.min(y, yBase);
+      let h = Math.abs(yBase - y);
+      if (h < 1 && v !== baseValue) {
+        h = 1;
+        if (y < yBase) top = yBase - 1;
+      }
+      if (h <= 0) return;
+      const x = i * bucketW + (bucketW - barW) / 2;
+      const fill = perPoint ? escapeHtml(colorAt(v)) : paint;
+      body.push(
+        `<rect class="bar" x="${r2(x)}" y="${r2(top)}" width="${r2(barW)}" height="${r2(h)}"${radius ? ` rx="${r2(radius)}"` : ""} style="fill:${fill}"${barOpacity < 1 ? ` fill-opacity="${r2(barOpacity)}"` : ""}/>`
+      );
+    });
+  }
+
+  // Lines / areas / steps
+  if (type === "line" || type === "area" || type === "line-bar" || type === "stepped") {
+    const runs = runsOf(values);
+    const linePaths = [];
+    const areaPaths = [];
+    const isolated = [];
+    for (const run of runs) {
+      if (type === "stepped") {
+        let d = "";
+        run.forEach((i, k) => {
+          const x0 = r2(i * bucketW);
+          const x1 = r2((i + 1) * bucketW);
+          const y = r2(yOf(values[i]));
+          d += k === 0 ? `M${x0},${y}H${x1}` : `V${y}H${x1}`;
+        });
+        linePaths.push(d);
+        const first = r2(run[0] * bucketW);
+        areaPaths.push(`${d}V${r2(yBase)}H${first}Z`);
+        continue;
+      }
+      if (run.length === 1 && n > 1) {
+        isolated.push(run[0]);
+        continue;
+      }
+      const pts = n === 1 ? [[0, yOf(values[0])], [width, yOf(values[0])]] : run.map((i) => [xLine(i), yOf(values[i])]);
+      const d = pts.map((p, k) => `${k ? "L" : "M"}${r2(p[0])},${r2(p[1])}`).join("");
+      linePaths.push(d);
+      areaPaths.push(`${d}L${r2(pts[pts.length - 1][0])},${r2(yBase)}L${r2(pts[0][0])},${r2(yBase)}Z`);
+    }
+    if (type === "area" || type === "stepped") {
+      for (const d of areaPaths) body.push(`<path class="area" d="${d}" style="fill:${linePaint}" fill-opacity="${r2(fillOpacity)}" stroke="none"/>`);
+    }
+    if (lineWidth > 0) {
+      for (const d of linePaths) {
+        body.push(`<path class="line" d="${d}" fill="none" style="stroke:${linePaint}" stroke-width="${r2(lineWidth)}" stroke-linejoin="round" stroke-linecap="round"/>`);
+      }
+    }
+    for (const i of isolated) {
+      body.push(`<circle class="point" cx="${r2(xLine(i))}" cy="${r2(yOf(values[i]))}" r="${r2(Math.max(1.5, lineWidth))}" style="fill:${perPoint ? escapeHtml(colorAt(values[i])) : paint}"/>`);
+    }
+    if (o.showPoints) {
+      values.forEach((v, i) => {
+        if (v === null) return;
+        const cx = type === "stepped" ? (i + 0.5) * bucketW : xLine(i);
+        body.push(`<circle class="point" cx="${r2(cx)}" cy="${r2(yOf(v))}" r="${r2(Math.max(1.5, lineWidth))}" style="fill:${perPoint ? escapeHtml(colorAt(v)) : paint}"/>`);
+      });
+    }
+  }
+
+  if (o.showAxis) {
+    const y = r2(yBase);
+    body.push(`<line class="axis" x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="currentColor" stroke-opacity="0.3" stroke-width="1" shape-rendering="crispEdges"/>`);
+  }
+
+  if (o.showLabels) {
+    const fmt = typeof o.labelFormatter === "function" ? o.labelFormatter : (v) => String(Math.round(v * 100) / 100);
+    const maxL = fmt(scale.max);
+    const minL = fmt(scale.min);
+    if (isDisplayable(maxL)) {
+      body.push(`<text class="label" x="${width - 3}" y="10" text-anchor="end" font-size="9" fill="currentColor" fill-opacity="0.7">${escapeHtml(maxL)}</text>`);
+    }
+    if (isDisplayable(minL)) {
+      body.push(`<text class="label" x="${width - 3}" y="${height - 3}" text-anchor="end" font-size="9" fill="currentColor" fill-opacity="0.7">${escapeHtml(minL)}</text>`);
+    }
+  }
+
+  const opacity = Math.min(1, Math.max(0, Number(o.opacity ?? 1)));
+  defs.push(`<clipPath id="${id}-clip"><rect x="0" y="0" width="${width}" height="${height}"/></clipPath>`);
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true" focusable="false">` +
+    `<defs>${defs.join("")}</defs>` +
+    `<g clip-path="url(#${id}-clip)"${opacity < 1 ? ` opacity="${r2(opacity)}"` : ""}>${body.join("")}</g></svg>`
+  );
+}

@@ -1,0 +1,56 @@
+# Example 1 – desk socket: state + power, bar graph in the left part of the card
+type: custom:smart-graph-button-card
+entity: switch.schreibtisch_1
+name: Schreibtisch 1
+icon: mdi:desk
+value_1:
+  entity: switch.schreibtisch_1
+  type: state
+  label: Status
+  state_mapping:
+    "on": Ein
+    "off": Aus
+    "unavailable": Nicht verfügbar
+value_2:
+  entity: sensor.schreibtisch_1_power
+  type: state
+  label: Verbrauch
+  decimals: 2
+  unit: W
+  fallback: "–"
+values:
+  layout: inline
+  separator: " · "
+icon_area:
+  shape: circle
+  color:
+    "on": "#22c55e"
+    "off": "#94a3b8"
+  background:
+    "on": "rgba(34, 197, 94, 0.15)"
+    "off": "rgba(148, 163, 184, 0.12)"
+graph:
+  enabled: true
+  entity: sensor.schreibtisch_1_power
+  type: bar
+  position: left
+  width: 55%
+  hours_to_show: 6
+  max_points: 60
+  aggregation: average
+  color_mode: thresholds
+  opacity: 0.65
+  thresholds:
+    - value: 0
+      color: "#22c55e"
+    - value: 10
+      color: "#f59e0b"
+    - value: 100
+      color: "#ef4444"
+layout:
+  height: 64px
+  border_radius: 14px
+tap_action:
+  action: toggle
+hold_action:
+  action: more-info

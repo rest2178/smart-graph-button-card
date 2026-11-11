@@ -1,0 +1,6 @@
+{
+  "name": "Smart Graph Button Card",
+  "filename": "smart-graph-button-card.js",
+  "render_readme": true,
+  "homeassistant": "2024.1.0"
+}

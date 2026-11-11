@@ -1,0 +1,47 @@
+# Example 3 – state background (green when on, neutral when off) and a
+# semi-transparent line graph that stays visible above the state color
+type: custom:smart-graph-button-card
+entity: light.wohnzimmer
+name: Wohnzimmer
+icon: mdi:sofa
+value_1:
+  type: state
+value_2:
+  entity: sensor.wohnzimmer_licht_power
+  label: Verbrauch
+  decimals: 1
+  unit: W
+state_background:
+  enabled: true
+  colors:
+    "on": "rgba(34, 197, 94, 0.16)"
+    "off": "rgba(148, 163, 184, 0.08)"
+    unavailable: "rgba(107, 114, 128, 0.10)"
+icon_area:
+  color:
+    "on": "#16a34a"
+    "off": "#94a3b8"
+    unavailable: "#6b7280"
+graph:
+  enabled: true
+  entity: sensor.wohnzimmer_licht_power
+  type: line
+  position: bottom
+  height: 45%
+  hours_to_show: 24
+  max_points: 120
+  line_width: 2
+  opacity: 0.55
+  color_mode: fixed
+  color: "#0ea5e9"
+layers:
+  graph_above_state_background: true
+  overlay:
+    enabled: false
+tap_action:
+  action: toggle
+hold_action:
+  action: more-info
+double_tap_action:
+  action: navigate
+  navigation_path: /lovelace/wohnzimmer

@@ -1,0 +1,56 @@
+# Example 4 – threshold colors: 0 to <10 W green, 10 to <100 W orange,
+# from 100 W red. Applied to icon, graph and card background.
+# Ranges: "from" inclusive, "to" exclusive, the last range is open upwards.
+type: custom:smart-graph-button-card
+entity: switch.server_rack
+name: Server-Rack
+icon: mdi:server
+value_1:
+  type: state
+  state_mapping:
+    "on": Ein
+    "off": Aus
+value_2:
+  entity: sensor.server_rack_power
+  label: Verbrauch
+  decimals: 1
+  unit: W
+  thresholds:
+    - value: 0
+      color: "#16a34a"
+    - value: 10
+      color: "#d97706"
+    - value: 100
+      color: "#dc2626"
+thresholds:
+  entity: sensor.server_rack_power
+  ranges:
+    - from: 0
+      to: 10
+      color: "#22c55e"
+    - from: 10
+      to: 100
+      color: "#f59e0b"
+    - from: 100
+      color: "#ef4444"
+  apply_to:
+    - icon
+    - icon-background
+    - graph
+    - card-background
+graph:
+  enabled: true
+  entity: sensor.server_rack_power
+  type: column
+  position: right
+  width: 45%
+  hours_to_show: 6
+  max_points: 48
+  aggregation: average
+  min: 0
+  color_mode: state
+  opacity: 0.6
+tap_action:
+  action: more-info
+hold_action:
+  action: more-info
