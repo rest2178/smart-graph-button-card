@@ -123,6 +123,7 @@ const LABELS = {
   icon_offset_y: "Symbol verschieben – vertikal",
   graph_gradient_direction: "Richtung",
   state_background_enabled: "Statushintergrund aktivieren",
+  text_contrast_auto: "Schriftfarbe automatisch lesbar halten (Hell-/Dunkelmodus)",
   tap_action: "Tap-Aktion",
   hold_action: "Hold-Aktion",
   double_tap_action: "Double-Tap-Aktion",
@@ -225,6 +226,7 @@ function graphColorSchema(mode, thresholdMode) {
 }
 
 const stateBackgroundSchema = () => [{ name: "state_background_enabled", selector: { boolean: {} } }];
+const textContrastSchema = () => [{ name: "text_contrast_auto", selector: { boolean: {} } }];
 
 const actionsSchema = () => [
   {
@@ -320,6 +322,7 @@ export function configToForm(config) {
     icon_offset_y: pxNumber(get(c, "icon_offset.y")),
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
     state_background_enabled: Boolean(get(c, "state_background.enabled")),
+    text_contrast_auto: c.text_contrast !== "off" && c.text_contrast !== false,
     tap_action: c.tap_action,
     hold_action: c.hold_action,
     double_tap_action: c.double_tap_action,
@@ -395,6 +398,9 @@ export function formToConfig(config, form) {
 
   if (d.state_background_enabled) setPath(out, "state_background.enabled", true);
   else if (out.state_background) setPath(out, "state_background.enabled", false);
+
+  if (d.text_contrast_auto === false) out.text_contrast = "off";
+  else delete out.text_contrast;
 
   for (const key of ["tap_action", "hold_action", "double_tap_action"]) setPath(out, key, d[key]);
   return out;
@@ -756,7 +762,7 @@ class SmartGraphButtonCardEditor extends EditorBase {
       colorField("Hintergrund „Ein“", get(c, "state_background.colors.on"), (v) => this._set("state_background.colors.on", v), "rgba(34, 197, 94, 0.15)"),
       colorField("Hintergrund „Aus“", get(c, "state_background.colors.off"), (v) => this._set("state_background.colors.off", v), "rgba(148, 163, 184, 0.08)")
     );
-    body.append(icons, this._panelForm(stateBackgroundSchema), backgrounds, h("div", "sgbc-ed-subtitle", "Schrift"), this._textColors());
+    body.append(icons, this._panelForm(stateBackgroundSchema), backgrounds, h("div", "sgbc-ed-subtitle", "Schrift"), this._panelForm(textContrastSchema), this._textColors());
   }
 
   /** Font colors. Maps per state (YAML) are kept and only shown as a note. */

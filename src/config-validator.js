@@ -40,6 +40,7 @@ export const COLOR_TARGETS = ["icon", "icon-background", "graph", "card-backgrou
 export const NAME_OVERFLOW = ["ellipsis", "clip", "wrap"];
 export const MAX_HOURS = 8760;
 export const VARIANTS = ["button", "info"];
+export const TEXT_CONTRAST_MODES = ["auto", "off"];
 export const GRAPH_BASELINES = ["zero", "bottom"];
 
 export class ConfigError extends Error {
@@ -69,6 +70,7 @@ export const DEFAULTS = Object.freeze({
   unknown_text: undefined,
   show_unavailable_badge: true,
   show_name: true,
+  text_contrast: "auto",
   value_position: "top-left",
   value_offset: { x: "0px", y: "0px" },
   icon_position: "name-left",
@@ -391,6 +393,9 @@ export function validateConfig(raw) {
     if (a.entity !== undefined) checkEntity(a.entity, `${key}.entity`, err);
   }
   c.show_name = c.show_name !== false;
+  if (c.text_contrast === true) c.text_contrast = "auto";
+  if (c.text_contrast === false) c.text_contrast = "off";
+  if (!TEXT_CONTRAST_MODES.includes(c.text_contrast)) err(`text_contrast „${c.text_contrast}“ ist ungültig. Erlaubt: ${TEXT_CONTRAST_MODES.join(", ")}.`);
   if (!isPlainObject(c.value_offset)) {
     err("value_offset muss ein Objekt mit x und y sein (z. B. x: 4, y: -6).");
     c.value_offset = { x: "0px", y: "0px" };

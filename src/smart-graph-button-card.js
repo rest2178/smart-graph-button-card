@@ -15,10 +15,11 @@ import { renderGraphSVG } from "./graph-renderer.js";
 import { GestureRecognizer, bindActionHandler, handleAction, hasAction } from "./action-handler.js";
 import { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx, paddingSide } from "./utils.js";
 import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
+import { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } from "./contrast.js";
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.5.0";
+export const CARD_VERSION = "1.6.0";
 
 let instanceCounter = 0;
 
@@ -334,6 +335,8 @@ export class SmartGraphButtonCard extends HTMLElement {
     this._graphRaf = 0;
     this._graphToken++; // discard pending history responses
     this._fetching = false;
+    clearTimeout(this._contrastTimer);
+    this._contrastTimer = 0;
   }
 
   _scheduleUpdate() {
@@ -349,6 +352,7 @@ export class SmartGraphButtonCard extends HTMLElement {
     this._graphRaf = requestAnimationFrame(() => {
       this._graphRaf = 0;
       this._renderGraph();
+      this._checkContrast();
     });
   }
 
@@ -542,7 +546,13 @@ export class SmartGraphButtonCard extends HTMLElement {
       card.classList.add("no-action");
     }
 
-    this._els = { card, stateBg, graph, overlay, content, iconWrap, iconArea, iconGraph, glyph, badge, name, values, v1, v2, sep };
+    // background fades are CSS transitions – re-check once they finished
+    const recheck = () => this._checkContrast();
+    stateBg.addEventListener("transitionend", recheck);
+    card.addEventListener("transitionend", (ev) => ev.target === card && recheck());
+    const probe = el("span", "probe", { "aria-hidden": "true" });
+    content.append(probe);
+    this._els = { card, stateBg, graph, overlay, content, iconWrap, iconArea, iconGraph, glyph, badge, name, values, v1, v2, sep, probe };
     this._graphSize = { w: 0, h: 0 };
     this._lastSvg = null;
     this._glyphKey = null;
@@ -557,6 +567,13 @@ export class SmartGraphButtonCard extends HTMLElement {
     try {
       this._updateContent();
       this._renderGraph();
+      this._checkContrast();
+      // background colors fade (CSS transition) – check again once settled
+      clearTimeout(this._contrastTimer);
+      this._contrastTimer = setTimeout(() => {
+        this._contrastTimer = 0;
+        this._checkContrast();
+      }, 320);
     } catch (err) {
       // never let a rendering problem break the dashboard
       // eslint-disable-next-line no-console
@@ -883,6 +900,129 @@ export class SmartGraphButtonCard extends HTMLElement {
     return { color, pointColor, gradient };
   }
 
+  // ------------------------------------------------------------ text contrast
+
+  /** Resolve any CSS color expression (var(), color-mix(), names …) to {r,g,b,a}. */
+  _toRgba(value) {
+    if (!isDisplayable(value)) return null;
+    const direct = parseCssColor(String(value));
+    if (direct) return direct;
+    const probe = this._els?.probe;
+    if (!probe) return null;
+    probe.style.color = "";
+    probe.style.color = String(value);
+    if (!probe.style.color) return null; // invalid color
+    const resolved = getComputedStyle(probe).color;
+    return parseCssColor(resolved) || this._canvasColor(resolved);
+  }
+
+  /** Last resort for formats like oklch()/lab(): let a canvas convert them. */
+  _canvasColor(value) {
+    try {
+      if (!SmartGraphButtonCard._ctx) {
+        const cv = document.createElement("canvas");
+        cv.width = cv.height = 1;
+        SmartGraphButtonCard._ctx = cv.getContext("2d", { willReadFrequently: true });
+      }
+      const ctx = SmartGraphButtonCard._ctx;
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = "#000";
+      ctx.fillStyle = value;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      return { r, g, b, a: a / 255 };
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  /** Opaque color of the page behind the card (used when the card is translucent). */
+  _pageBackground() {
+    const css = getComputedStyle(this);
+    for (const v of ["--primary-background-color", "--lovelace-background"]) {
+      const c = this._toRgba(css.getPropertyValue(v).trim());
+      if (c && c.a > 0) return composite(c, this._hass?.themes?.darkMode ? { r: 17, g: 17, b: 17 } : { r: 250, g: 250, b: 250 });
+    }
+    return this._hass?.themes?.darkMode ? { r: 17, g: 17, b: 17, a: 1 } : { r: 250, g: 250, b: 250, a: 1 };
+  }
+
+  /** Graph colors and the alpha with which their fill covers the text. */
+  _graphFillColors() {
+    const c = this._config;
+    const paint = this._graphPaint;
+    if (!c.graph.enabled || !paint || c.graph.position === "icon-area") return null;
+    const type = c.graph.type;
+    if (type === "line" || type === "stepped") return null; // thin line only – the halo handles it
+    const isBar = type === "bar" || type === "column";
+    const fill = isBar ? 1 : type === "line-bar" || type === "smooth-line-bar" ? Math.max(Number(c.graph.fill_opacity) || 0, 0.35) : Number(c.graph.fill_opacity ?? 0.25);
+    const layer = parseFloat(getComputedStyle(this._els.graph).opacity);
+    const alpha = Math.max(0, Math.min(1, fill * (Number.isFinite(layer) ? layer : 1)));
+    if (alpha < 0.05) return null;
+    const list = [paint.color];
+    if (paint.gradient) list.push(paint.gradient.from, paint.gradient.to);
+    if (paint.bands) {
+      list.push(paint.bands.base);
+      for (const st of paint.bands.stops || []) list.push(st.color);
+    }
+    if (paint.pointColor) for (const r of this._ranges.graph || []) list.push(r.color);
+    const out = [];
+    for (const v of list) {
+      const rgba = this._toRgba(v);
+      if (rgba) out.push({ ...rgba, a: (rgba.a ?? 1) * alpha });
+    }
+    return out.length ? out : null;
+  }
+
+  /**
+   * Keep every text readable on the actual background – light theme, dark
+   * theme, state backgrounds and graphs behind the text. A configured color
+   * keeps its hue; only its lightness is changed when the contrast is too low.
+   */
+  _checkContrast() {
+    const c = this._config;
+    const els = this._els;
+    if (!c || !els || typeof getComputedStyle === "undefined") return;
+    const targets = [els.name, els.v1.wrap, els.v1.unit, els.sep, els.v2.wrap, els.v2.unit];
+    if (c.text_contrast === "off") {
+      for (const t of targets) t.style.removeProperty("color");
+      els.card.classList.remove("text-halo");
+      return;
+    }
+    try {
+      // background stack under the text: page → card → state background → overlay
+      let bg = this._pageBackground();
+      for (const layer of [els.card, els.stateBg, els.overlay]) {
+        const col = this._toRgba(getComputedStyle(layer).backgroundColor);
+        if (col && col.a > 0) bg = composite(col, bg);
+      }
+      const graphColors = this._graphFillColors();
+      const graphRect = graphColors ? this._graphTarget().getBoundingClientRect() : null;
+      let halo = false;
+      for (const t of targets) {
+        t.style.removeProperty("color");
+        if (t.classList.contains("hidden") || !t.textContent) continue;
+        const cs = getComputedStyle(t);
+        const fg = this._toRgba(cs.color);
+        if (!fg) continue;
+        const backgrounds = [bg];
+        if (graphRect && graphRect.width && graphRect.height) {
+          const r = t.getBoundingClientRect();
+          const overlaps = r.width && r.height && r.left < graphRect.right && r.right > graphRect.left && r.top < graphRect.bottom && r.bottom > graphRect.top;
+          if (overlaps) {
+            halo = true;
+            for (const gc of graphColors) backgrounds.push(composite(gc, bg));
+          }
+        }
+        const fixed = ensureContrast(fg, backgrounds, contrastTarget(parseFloat(cs.fontSize) || 14, cs.fontWeight));
+        if (fixed) t.style.setProperty("color", rgbString(fixed));
+      }
+      els.card.classList.toggle("text-halo", halo);
+      els.card.style.setProperty("--sgbc-halo-color", rgbString(bg));
+    } catch (_err) {
+      /* contrast is a nicety – never break the card */
+    }
+  }
+
   _renderGraph() {
     const c = this._config;
     if (!c || !this._els || !c.graph.enabled) return;
@@ -903,6 +1043,7 @@ export class SmartGraphButtonCard extends HTMLElement {
       fill: g.fill,
     });
     const { color, pointColor, gradient, bands } = this._graphColors(data);
+    this._graphPaint = { color, pointColor, gradient, bands };
     const locale = getNumberLocale(this._hass);
     const svg = renderGraphSVG({
       data,

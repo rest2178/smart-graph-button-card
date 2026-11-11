@@ -118,3 +118,13 @@ test("editor: icon position and offset", () => {
   assert.deepEqual(out.icon_offset, { x: 4 });
   assert.equal(formToConfig(out, { ...configToForm(out), icon_position: "name-left" }).icon_position, undefined);
 });
+
+test("text_contrast toggle maps to text_contrast: off and back", () => {
+  const base = { type: "custom:smart-graph-button-card", entity: "sensor.x" };
+  assert.equal(configToForm(base).text_contrast_auto, true);
+  const off = formToConfig(base, { ...configToForm(base), text_contrast_auto: false });
+  assert.equal(off.text_contrast, "off");
+  assert.equal(configToForm(off).text_contrast_auto, false);
+  const on = formToConfig(off, { ...configToForm(off), text_contrast_auto: true });
+  assert.equal(on.text_contrast, undefined);
+});

@@ -273,6 +273,12 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 }
 .info-layout .value-2 { font-size: var(--sgbc-value-2-size, var(--sgbc-values-size, 12px)); }
 
+.probe { display: none; }
+/* readable text over a graph: soft halo in the card background color */
+ha-card.sgbc.text-halo .name,
+ha-card.sgbc.text-halo .values {
+  text-shadow: 0 0 2px var(--sgbc-halo-color, transparent), 0 0 6px var(--sgbc-halo-color, transparent);
+}
 .effects { z-index: 5; transition: background-color 120ms ease, box-shadow 120ms ease; }
 @media (hover: hover) {
   ha-card.sgbc:not(.no-action):hover .effects { background: color-mix(in srgb, var(--primary-text-color) 5%, transparent); }

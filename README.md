@@ -66,6 +66,7 @@ Beide stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
 - Graphpositionen `full`, `after-icon`, `left`, `right`, `bottom`, `icon-area`, `custom`
 - Farbmodi `fixed`, `state`, `thresholds` (beliebig viele Grenzwerte, `current` oder `per-point`), `gradient`, `sign` (über/unter null)
 - Statusabhängiger Kartenhintergrund, Lesbarkeits-Overlay, Ebenenreihenfolge einstellbar
+- Automatisch lesbare Schriftfarben im Hell- und Dunkelmodus (Kontrastprüfung, Farbton bleibt erhalten)
 - Eigene Zustandsregeln mit `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `regex`
 - Aktionen für Tap, Hold und Double-Tap; Maus, Touch und Tastatur werden unterstützt
 - Visueller Editor auf Basis des nativen `ha-form`, mit Farbwähler (Maus oder Texteingabe) und Grenzwertliste
@@ -216,6 +217,7 @@ Alle Optionen sind optional, außer `entity`. CSS-Längen dürfen als Zahl (wird
 | `unavailable_text` | string | natives HA-Format | Text für `unavailable` |
 | `unknown_text` | string | natives HA-Format | Text für `unknown` |
 | `show_name` | bool | `true` | Name anzeigen (`false` blendet ihn aus, z. B. bei der Info-Karte) |
+| `text_contrast` | `auto` \| `off` | `auto` | Schriftfarben automatisch lesbar halten (siehe [Lesbarkeit](#lesbarkeit-im-hell--und-dunkelmodus)) |
 | `show_unavailable_badge` | bool | `true` | Warn-Badge am Symbol bei `unavailable`/`unknown` oder fehlendem Entity |
 | `hold_time` | number (ms) | `500` | Dauer bis zum Hold (200–5000) |
 | `double_tap_window` | number (ms) | `250` | Zeitfenster für Double-Tap (100–1000) |
@@ -324,6 +326,15 @@ value_2:
 ```
 
 Vorrang: `thresholds.apply_to` (`name`, `value-1`, `value-2`) → `states[].color` über `color_targets` → Wert-Grenzwerte (`value_N.thresholds`) → konfigurierte Farbe → Theme. Im Editor stehen die Schriftfarben unter „Farben & Hintergrund → Schrift“. Ist eine Farbe im YAML je Zustand festgelegt, zeigt der Editor nur einen Hinweis und lässt die Zuordnung unverändert.
+
+#### Lesbarkeit im Hell- und Dunkelmodus
+
+Mit `text_contrast: auto` (Standard) prüft die Karte nach jeder Änderung den Kontrast jeder Schrift (Name, Werte, Einheiten, Trenner) gegen den tatsächlichen Hintergrund. Dazu zählen der Hintergrund des Themes, der Statushintergrund, das Overlay und ein Graph, der hinter der Schrift liegt.
+
+- Ist eine Schrift zu schwach (unter 4,5 : 1, bei großer Schrift unter 3 : 1), wird nur ihre **Helligkeit** angepasst. Der Farbton bleibt erhalten: Dunkelblau wird im Dunkelmodus zu Hellblau, Gelb wird im Hellmodus zu Ocker. Angestrebt wird ein gut lesbarer Kontrast von 7 : 1.
+- Liegt die Schrift über einem Graphen, bekommt sie zusätzlich einen weichen Schein in der Hintergrundfarbe.
+- Ausreichend lesbare Farben werden nie verändert. Beim Wechsel zwischen Hell und Dunkel wird automatisch neu geprüft.
+- `text_contrast: off` zeigt die konfigurierten Farben exakt so an, wie sie eingestellt sind. Im Editor: „Farben & Hintergrund → Schrift → Schriftfarbe automatisch lesbar halten“.
 
 Es wird **nie** `undefined`, `null`, `NaN` oder `Infinity` angezeigt. In solchen Fällen erscheint `fallback`.
 
@@ -608,7 +619,7 @@ Im Karteneditor stehen zur Verfügung:
 - **Entity, Name, Symbol** sowie **Werte** (Wert 1 und Wert 2)
 - **Graph:** aktivieren, Entity, Typ, Position, Zeitraum, weicher Übergang am Beginn und am Ende (Schieberegler)
 - **Graph-Farben:** Farbmodus wählen. Je nach Modus erscheinen eine feste Farbe, Farben für Ein/Aus, Verlauf von/bis, Farben über/unter null oder die **Grenzwertliste**: Zeilen mit „Ab Wert“ und Farbe, beliebig viele über „Grenzwert hinzufügen“, Entfernen mit ✕. Beim ersten Wechsel auf „Nach Grenzwerten“ ist die Liste mit 10/50/100/200 vorbelegt.
-- **Farben & Hintergrund:** Symbolfarben und Statushintergrund für Ein/Aus, Schriftfarben für Name, beide Werte, Wert 1 und Wert 2
+- **Farben & Hintergrund:** Symbolfarben und Statushintergrund für Ein/Aus, Schriftfarben für Name, beide Werte, Wert 1 und Wert 2, Schalter für automatisch lesbare Schrift
 - **Interaktionen:** Tap, Hold, Double-Tap
 
 **Farbfelder:** Ein Klick auf den runden Farbkreis öffnet die Farbauswahl des Browsers (Maus). Im Textfeld daneben kann jeder CSS-Wert eingetippt werden, z. B. `#22c55e`, `rgba(34, 197, 94, 0.15)`, `orange` oder `var(--primary-color)`. Wird bei einer halbtransparenten `rgba()`-Farbe mit der Maus eine neue Farbe gewählt, bleibt die Transparenz erhalten.
