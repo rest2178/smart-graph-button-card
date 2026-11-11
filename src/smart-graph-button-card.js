@@ -17,7 +17,7 @@ import { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx } from "./uti
 import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
 
 export const CARD_TAG = "smart-graph-button-card";
-export const CARD_VERSION = "1.0.0";
+export const CARD_VERSION = "1.1.0";
 
 let instanceCounter = 0;
 

@@ -53,13 +53,13 @@ Eine kompakte, frei parametrierbare **Button-Karte für Home Assistant** mit Sym
 - Symbolhintergrund in den Formen `circle`, `rounded-square`, `square` oder `none`, Farben je Zustand, CSS-Animationen (`pulse`, `rotate`, `blink`); bei `prefers-reduced-motion` sind sie aus
 - Name aus der Konfiguration, aus `friendly_name`, aus einem Attribut oder aus einem sicheren Template
 - Zwei Werte, nebeneinander (`inline`) oder untereinander (`stacked`): State, Attribut, Text, Name, `last_changed`, `last_updated`, Template, Formatierungsfunktionen
-- Graph mit `line`, `area`, `bar`, `column`, `stepped`, `line-bar` in nativem SVG
+- Graph mit `line`, `area`, `bar`, `column`, `stepped`, `line-bar`, `smooth-line-bar` in nativem SVG
 - Graphpositionen `full`, `left`, `right`, `bottom`, `icon-area`, `custom`
-- Farbmodi `fixed`, `state`, `thresholds` (`current` oder `per-point`), `gradient`
+- Farbmodi `fixed`, `state`, `thresholds` (beliebig viele Grenzwerte, `current` oder `per-point`), `gradient`
 - Statusabhängiger Kartenhintergrund, Lesbarkeits-Overlay, Ebenenreihenfolge einstellbar
 - Eigene Zustandsregeln mit `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `regex`
 - Aktionen für Tap, Hold und Double-Tap; Maus, Touch und Tastatur werden unterstützt
-- Visueller Editor auf Basis des nativen `ha-form`
+- Visueller Editor auf Basis des nativen `ha-form`, mit Farbwähler (Maus oder Texteingabe) und Grenzwertliste
 - Barrierefreiheit: `role="button"`, `tabindex="0"`, aussagekräftiges `aria-label`, sichtbarer Fokus, Unavailable-Badge (der Zustand wird nicht nur über Farbe vermittelt)
 
 ## Installation über HACS (benutzerdefiniertes Repository)
@@ -275,7 +275,7 @@ value_2:
 | `color_mode` | `state` | siehe [Farbmodi](#farbmodi) |
 | `color` | `var(--sgbc-graph-color)` | Farbe für `fixed` und Rückfallfarbe |
 | `colors` | HA-Variablen | Map je Zustand für `state` |
-| `thresholds` | `[]` | `[{value, color}]` für `thresholds` |
+| `thresholds` | `[]` | `[{value, color}, …]` für `thresholds`, beliebig viele Einträge |
 | `threshold_mode` | `current` | `current` oder `per-point` |
 | `gradient` | grün → rot, vertikal | `{from, to, direction: vertical \| horizontal}` |
 | `update_interval` | `300` | Sekunden zwischen History-Abfragen (mindestens 10) |
@@ -361,7 +361,8 @@ Die Karte verwendet außerdem die HA-Variablen `--ha-card-background`, `--card-b
 | `bar` | Balken je Zeitfenster mit `bar_gap`, `bar_width` und `bar_radius`; negative Werte wachsen nach unten |
 | `column` | Lückenlose Säulen (Histogramm-Optik) |
 | `stepped` | Stufenlinie mit Fläche, passend für Zustandswechsel |
-| `line-bar` | Halbtransparente Balken plus Linie |
+| `line-bar` | Halbtransparente Balken plus Linie durch die Balkenmitten |
+| `smooth-line-bar` | Wie `line-bar`, aber mit abgerundeter Linie. Die Glättung ist monoton: Spitzen werden gerundet, die Linie schießt aber nie über die echten Werte hinaus |
 
 Skalierung: automatisch oder manuell (`min`/`max`). Bei konstanten Werten wird symmetrisch aufgepolstert. Flächen- und Balkengraphen beziehen im Auto-Modus die Nulllinie ein. Darüber gibt es 5 % Luft.
 
@@ -406,6 +407,22 @@ graph:
 
 Bei `per-point` wird jeder Balken einzeln eingefärbt. Linien und Flächen erhalten Segmentfarben über einen horizontalen Verlauf mit harten Übergängen.
 
+**Beliebig viele Farben je Wertebereich.** Jeder Eintrag gilt **ab** seinem Wert bis zum nächsthöheren Eintrag. Die Reihenfolge in der Liste ist egal, die Karte sortiert selbst:
+
+```yaml
+graph:
+  type: smooth-line-bar
+  color_mode: thresholds
+  threshold_mode: per-point
+  thresholds:
+    - { value: 10, color: "#22c55e" }    # 10 bis unter 50 W: grün
+    - { value: 50, color: "#eab308" }    # 50 bis unter 100 W: gelb
+    - { value: 100, color: "#f97316" }   # 100 bis unter 200 W: orange
+    - { value: 200, color: "#ef4444" }   # ab 200 W: rot
+```
+
+Werte unter dem kleinsten Eintrag (hier unter 10 W) erhalten die normale Graphfarbe (`color`). Soll auch dieser Bereich farbig sein, einen Eintrag mit `value: 0` ergänzen.
+
 ## Ebenen
 
 1. Grundhintergrund (`ha-card`)
@@ -425,6 +442,18 @@ Vollständige Beispiele liegen in [`examples/`](examples/):
 - [`full-background-graph.yaml`](examples/full-background-graph.yaml): Flächengraph über die ganze Karte, Overlay, Graphfarbe nach Zustand
 - [`state-background.yaml`](examples/state-background.yaml): Statushintergrund und halbtransparenter Graph
 - [`threshold-colors.yaml`](examples/threshold-colors.yaml): 0 bis < 10 W grün, 10 bis < 100 W orange, ab 100 W rot; angewendet auf Symbol, Graph und Hintergrund
+
+## Visueller Editor
+
+Im Karteneditor stehen zur Verfügung:
+
+- **Entity, Name, Symbol** sowie **Werte** (Wert 1 und Wert 2)
+- **Graph:** aktivieren, Entity, Typ, Position, Zeitraum
+- **Graph-Farben:** Farbmodus wählen. Je nach Modus erscheinen eine feste Farbe, Farben für Ein/Aus, Verlauf von/bis oder die **Grenzwertliste**: Zeilen mit „Ab Wert“ und Farbe, beliebig viele über „Grenzwert hinzufügen“, Entfernen mit ✕. Beim ersten Wechsel auf „Nach Grenzwerten“ ist die Liste mit 10/50/100/200 vorbelegt.
+- **Farben & Hintergrund:** Symbolfarben und Statushintergrund für Ein/Aus
+- **Interaktionen:** Tap, Hold, Double-Tap
+
+**Farbfelder:** Ein Klick auf den runden Farbkreis öffnet die Farbauswahl des Browsers (Maus). Im Textfeld daneben kann jeder CSS-Wert eingetippt werden, z. B. `#22c55e`, `rgba(34, 197, 94, 0.15)`, `orange` oder `var(--primary-color)`. Wird bei einer halbtransparenten `rgba()`-Farbe mit der Maus eine neue Farbe gewählt, bleibt die Transparenz erhalten.
 
 ## History-Abfrage
 
@@ -454,7 +483,7 @@ Cache-Schlüssel: Entity-ID, Attribut, Startzeit, Endzeit, Zeitraum (`hours_to_s
 `setConfig()` prüft die Konfiguration und zeigt **alle** Fehler gesammelt direkt in der Karte an, statt eine unbehandelte Ausnahme zu werfen. Zum Beispiel:
 
 - `„entity“ fehlt …`
-- `graph.type „pie“ ist ungültig. Erlaubt: line, area, bar, column, stepped, line-bar.`
+- `graph.type „pie“ ist ungültig. Erlaubt: line, area, bar, column, stepped, line-bar, smooth-line-bar.`
 - `graph.hours_to_show muss größer als 0 sein.`
 - `graph.position „top“ ist unbekannt …`
 - `graph.thresholds[0].value muss eine Zahl sein.`
@@ -502,6 +531,7 @@ src/
   state-resolver.js                  Zustandsgruppen, Regeln, Grenzwerte
   config-validator.js                Validierung und Standardwerte
   styles.js                          CSS
+  color-utils.js                     Farb-Hilfsfunktionen für den Editor
   utils.js                           Hilfsfunktionen
 test/                                Unit-Tests
 examples/                            YAML-Beispiele
@@ -516,7 +546,8 @@ Die Tests decken unter anderem ab: on/off-Auswertung, unavailable/unknown, Zahle
 - Die `assist`-Aktion ist auf das `hass-action`-Ereignis des Frontends angewiesen.
 - Langzeitstatistiken (`recorder/statistics_during_period`) werden nicht genutzt. Es werden nur Rohdaten aus der History geladen, begrenzt durch die Recorder-Aufbewahrung (Standard 10 Tage).
 - Kein Abbrechen laufender History-Anfragen möglich (keine `AbortSignal`-Unterstützung in `hass.callWS`). Veraltete Antworten werden verworfen.
-- Der visuelle Editor deckt die wichtigsten Optionen ab. Grenzwerte, eigene Zustände, Ebenen und Layout werden im YAML-Modus konfiguriert.
+- Der visuelle Editor deckt die wichtigsten Optionen ab. Eigene Zustände, Ebenen, Layout und die Grenzwertfarben für Symbol und Hintergrund (`thresholds` auf oberster Ebene) werden im YAML-Modus konfiguriert.
+- Die Farbauswahl mit der Maus nutzt den Farbwähler des Browsers. Er kennt keine Transparenz; diese wird über das Textfeld eingestellt.
 
 ## Lizenz
 

@@ -7,7 +7,7 @@
 
 import { escapeHtml, isDisplayable } from "./utils.js";
 
-export const GRAPH_TYPES = ["line", "area", "bar", "column", "stepped", "line-bar"];
+export const GRAPH_TYPES = ["line", "area", "bar", "column", "stepped", "line-bar", "smooth-line-bar"];
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -63,12 +63,42 @@ function runsOf(values) {
 }
 
 /**
+ * Smooth SVG path through the points using monotone cubic interpolation
+ * (Fritsch–Carlson / Steffen). Peaks and valleys are rounded but the curve
+ * never overshoots the real values, so it always stays inside the plot area.
+ */
+export function smoothPath(pts) {
+  const n = pts.length;
+  const f = (p) => `${r2(p[0])},${r2(p[1])}`;
+  if (n < 3) return pts.map((p, k) => `${k ? "L" : "M"}${f(p)}`).join("");
+  const dx = [];
+  const m = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx[i] = pts[i + 1][0] - pts[i][0] || 1e-9;
+    m[i] = (pts[i + 1][1] - pts[i][1]) / dx[i];
+  }
+  const t = new Array(n);
+  t[0] = m[0];
+  t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (m[i - 1] * m[i] <= 0) t[i] = 0; // local peak/valley: flat tangent => rounded tip
+    else t[i] = (3 * (dx[i - 1] + dx[i])) / ((2 * dx[i] + dx[i - 1]) / m[i - 1] + (dx[i] + 2 * dx[i - 1]) / m[i]);
+  }
+  let d = `M${f(pts[0])}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i] / 3;
+    d += `C${f([pts[i][0] + h, pts[i][1] + t[i] * h])} ${f([pts[i + 1][0] - h, pts[i + 1][1] - t[i + 1] * h])} ${f(pts[i + 1])}`;
+  }
+  return d;
+}
+
+/**
  * Render the graph.
  *
  * @param {object} o
  * @param {Array<{v:number|null}>} o.data        reduced buckets
  * @param {number} o.width, o.height              pixel size of the drawing area
- * @param {string} o.type                         line|area|bar|column|stepped|line-bar
+ * @param {string} o.type                         line|area|bar|column|stepped|line-bar|smooth-line-bar
  * @param {string} o.color                        base color (already resolved)
  * @param {(v:number)=>string|null} [o.pointColor] per-point color function (thresholds per-point)
  * @param {{from:string,to:string,direction:string}} [o.gradient]
@@ -84,7 +114,8 @@ export function renderGraphSVG(o) {
   const type = GRAPH_TYPES.includes(o.type) ? o.type : "line";
   const id = String(o.idPrefix || "sgbc").replace(/[^a-zA-Z0-9_-]/g, "");
   const lineWidth = Math.max(0, Number(o.lineWidth ?? 2));
-  const barish = type === "bar" || type === "column" || type === "line-bar";
+  const lineBar = type === "line-bar" || type === "smooth-line-bar";
+  const barish = type === "bar" || type === "column" || lineBar;
   const filled = type === "area" || type === "stepped" || barish;
   const scale = computeScale(values, { min: o.min, max: o.max, includeZero: filled });
 
@@ -100,7 +131,8 @@ export function renderGraphSVG(o) {
   const yBase = yOf(baseValue);
   const n = values.length;
   const bucketW = width / n;
-  const xLine = (i) => (n === 1 ? width / 2 : (i / (n - 1)) * width);
+  // line-bar types: line points sit on the bar centres
+  const xLine = (i) => (lineBar ? (i + 0.5) * bucketW : n === 1 ? width / 2 : (i / (n - 1)) * width);
 
   const color = isDisplayable(o.color) ? String(o.color) : "var(--sgbc-graph-color, var(--primary-color, #03a9f4))";
   const defs = [];
@@ -125,7 +157,7 @@ export function renderGraphSVG(o) {
     return isDisplayable(c) ? String(c) : color;
   };
   let linePaint = paint;
-  if (perPoint && !barish) {
+  if (perPoint && (!barish || lineBar)) {
     const stops = [];
     let prev = color;
     values.forEach((v, i) => {
@@ -133,7 +165,7 @@ export function renderGraphSVG(o) {
       prev = c;
       let from;
       let to;
-      if (type === "stepped") {
+      if (type === "stepped" || lineBar) {
         from = i / n;
         to = (i + 1) / n;
       } else {
@@ -162,7 +194,7 @@ export function renderGraphSVG(o) {
     const requested = Number(o.barWidth);
     const barW = Math.max(1, Number.isFinite(requested) && requested > 0 ? Math.min(requested, bucketW) : bucketW - gap);
     const radius = type === "column" ? 0 : Math.max(0, Math.min(Number(o.barRadius ?? 1), barW / 2));
-    const barOpacity = type === "line-bar" ? Math.max(fillOpacity, 0.35) : 1;
+    const barOpacity = lineBar ? Math.max(fillOpacity, 0.35) : 1;
     values.forEach((v, i) => {
       if (v === null) return;
       const y = yOf(v);
@@ -182,7 +214,7 @@ export function renderGraphSVG(o) {
   }
 
   // Lines / areas / steps
-  if (type === "line" || type === "area" || type === "line-bar" || type === "stepped") {
+  if (type === "line" || type === "area" || type === "stepped" || lineBar) {
     const runs = runsOf(values);
     const linePaths = [];
     const areaPaths = [];
@@ -206,7 +238,7 @@ export function renderGraphSVG(o) {
         continue;
       }
       const pts = n === 1 ? [[0, yOf(values[0])], [width, yOf(values[0])]] : run.map((i) => [xLine(i), yOf(values[i])]);
-      const d = pts.map((p, k) => `${k ? "L" : "M"}${r2(p[0])},${r2(p[1])}`).join("");
+      const d = type === "smooth-line-bar" ? smoothPath(pts) : pts.map((p, k) => `${k ? "L" : "M"}${r2(p[0])},${r2(p[1])}`).join("");
       linePaths.push(d);
       areaPaths.push(`${d}L${r2(pts[pts.length - 1][0])},${r2(yBase)}L${r2(pts[0][0])},${r2(yBase)}Z`);
     }

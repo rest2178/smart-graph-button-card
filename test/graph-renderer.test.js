@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeScale, renderGraphSVG, GRAPH_TYPES } from "../src/graph-renderer.js";
+import { computeScale, renderGraphSVG, smoothPath, GRAPH_TYPES } from "../src/graph-renderer.js";
 
 const data = (vals) => vals.map((v, i) => ({ t: i, v }));
 
@@ -62,4 +62,29 @@ test("per-point colors for bars and lines", () => {
 test("colors are escaped (no markup injection)", () => {
   const svg = renderGraphSVG({ data: data([1, 2]), width: 100, height: 20, type: "bar", color: '"><script>x</script>' });
   assert.doesNotMatch(svg, /<script>/);
+});
+
+test("smooth-line-bar: bars plus a rounded (cubic) line that never overshoots", () => {
+  const vals = [0, 10, 2, 8, 8, 1, 12, 0];
+  const svg = renderGraphSVG({ data: data(vals), width: 160, height: 40, type: "smooth-line-bar", min: 0, max: 12 });
+  assert.match(svg, /class="bar"/);
+  const line = svg.match(/<path class="line" d="([^"]+)"/)[1];
+  assert.match(line, /C/, "uses cubic curves");
+  const ys = [...line.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[2]));
+  assert.ok(ys.every((y) => y >= 0 && y <= 40), "all control points inside the plot");
+});
+
+test("smoothPath: flat tangent at peaks, straight for two points", () => {
+  assert.equal(smoothPath([[0, 0], [10, 10]]), "M0,0L10,10");
+  const d = smoothPath([[0, 10], [10, 0], [20, 10]]);
+  // control points next to the peak (10,0) have the same y => rounded tip
+  assert.match(d, /C[\d.]+,[\d.]+ [\d.]+,0 10,0C[\d.]+,0 /);
+});
+
+test("smooth-line-bar with per-point threshold colors (many thresholds)", () => {
+  const colors = [[10, "green"], [50, "yellow"], [100, "orange"], [200, "red"]];
+  const pointColor = (v) => { let c = null; for (const [t, col] of colors) if (v >= t) c = col; return c; };
+  const svg = renderGraphSVG({ data: data([5, 20, 60, 150, 250]), width: 100, height: 20, type: "smooth-line-bar", pointColor, color: "gray" });
+  for (const c of ["gray", "green", "yellow", "orange", "red"]) assert.match(svg, new RegExp(`fill:${c}`), c);
+  assert.match(svg, /linearGradient id="sgbc-pp"/);
 });
