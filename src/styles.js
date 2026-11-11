@@ -187,6 +187,7 @@ ha-card.sgbc.auto-height { height: auto; min-height: 48px; }
   overflow-wrap: anywhere;
 }
 .name.overflow-clip { text-overflow: clip; }
+.name.hidden { display: none; }
 .name.multiline {
   white-space: normal;
   display: -webkit-box;

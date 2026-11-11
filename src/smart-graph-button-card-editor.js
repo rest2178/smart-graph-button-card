@@ -44,7 +44,12 @@ const COLOR_MODES = [
 ];
 const THRESHOLD_MODES = [
   ["per-point", "Jeder Wert in eigener Farbe"],
+  ["vertical", "Nach Höhe im Graph (Farbbänder)"],
   ["current", "Ganzer Graph nach aktuellem Wert"],
+];
+const THRESHOLD_BLENDS = [
+  ["hard", "Harte Grenze"],
+  ["smooth", "Weicher Verlauf"],
 ];
 const GRADIENT_DIRECTIONS = [
   ["vertical", "Vertikal (unten → oben)"],
@@ -81,6 +86,8 @@ const LABELS = {
   graph_fade_end: "Weicher Übergang am Ende (rechts)",
   graph_color_mode: "Farbmodus",
   graph_threshold_mode: "Anwendung",
+  graph_threshold_blend: "Übergang zwischen den Farben",
+  show_name: "Name anzeigen",
   graph_gradient_direction: "Richtung",
   state_background_enabled: "Statushintergrund aktivieren",
   tap_action: "Tap-Aktion",
@@ -106,6 +113,7 @@ function mainSchema(cfg) {
         { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
       ],
     },
+    { name: "show_name", selector: { boolean: {} } },
     {
       type: "expandable",
       name: "values_section",
@@ -153,9 +161,10 @@ function mainSchema(cfg) {
   ];
 }
 
-function graphColorSchema(mode) {
+function graphColorSchema(mode, thresholdMode) {
   const extra = [];
   if (mode === "thresholds") extra.push({ name: "graph_threshold_mode", selector: { select: { mode: "dropdown", options: options(THRESHOLD_MODES) } } });
+  if (mode === "thresholds" && thresholdMode === "vertical") extra.push({ name: "graph_threshold_blend", selector: { select: { mode: "dropdown", options: options(THRESHOLD_BLENDS) } } });
   if (mode === "gradient") extra.push({ name: "graph_gradient_direction", selector: { select: { mode: "dropdown", options: options(GRADIENT_DIRECTIONS) } } });
   return [{ type: "grid", name: "", schema: [{ name: "graph_color_mode", selector: { select: { mode: "dropdown", options: options(COLOR_MODES) } } }, ...extra] }];
 }
@@ -239,6 +248,8 @@ export function configToForm(config) {
     graph_fade_end: fadePercent(get(c, "graph.fade_end") ?? get(c, "graph.fade")),
     graph_color_mode: get(c, "graph.color_mode") || defaultColorMode(c),
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
+    graph_threshold_blend: get(c, "graph.threshold_blend") || "hard",
+    show_name: c.show_name !== false,
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
     state_background_enabled: Boolean(get(c, "state_background.enabled")),
     tap_action: c.tap_action,
@@ -252,6 +263,8 @@ export function formToConfig(config, form) {
   const out = clone(config);
   const d = form || {};
   setPath(out, "entity", d.entity);
+  if (d.show_name === false) out.show_name = false;
+  else delete out.show_name;
   if (d.variant && out.type !== "custom:smart-graph-info-card") setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
   if (d.name !== undefined || typeof out.name === "string") setPath(out, "name", d.name);
   if (d.icon !== undefined || typeof out.icon === "string") setPath(out, "icon", d.icon);
@@ -288,6 +301,7 @@ export function formToConfig(config, form) {
     if (mode === "thresholds") {
       const hadMode = Boolean(get(config, "graph.threshold_mode"));
       if (d.graph_threshold_mode && (d.graph_threshold_mode !== "current" || hadMode)) out.graph.threshold_mode = d.graph_threshold_mode;
+      if (d.graph_threshold_blend && (d.graph_threshold_blend !== "hard" || out.graph.threshold_blend)) out.graph.threshold_blend = d.graph_threshold_blend;
       if (!Array.isArray(out.graph.thresholds) || out.graph.thresholds.length === 0) {
         out.graph.thresholds = clone(DEFAULT_THRESHOLDS);
         if (!out.graph.threshold_mode) out.graph.threshold_mode = "per-point";
@@ -556,7 +570,7 @@ class SmartGraphButtonCardEditor extends EditorBase {
     body.replaceChildren();
     const c = this._config;
     const mode = get(c, "graph.color_mode") || defaultColorMode(c);
-    body.append(this._panelForm((cfg) => graphColorSchema(get(cfg, "graph.color_mode") || defaultColorMode(cfg))));
+    body.append(this._panelForm((cfg) => graphColorSchema(get(cfg, "graph.color_mode") || defaultColorMode(cfg), get(cfg, "graph.threshold_mode"))));
     if (c.graph && c.graph.enabled === false) body.append(h("p", "sgbc-ed-note", "Der Graph ist deaktiviert. Die Farben gelten, sobald er aktiviert wird."));
 
     if (mode === "fixed") {

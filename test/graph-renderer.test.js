@@ -89,23 +89,22 @@ test("smooth-line-bar with per-point threshold colors (many thresholds)", () => 
   assert.match(svg, /linearGradient id="sgbc-pp"/);
 });
 
-test("smooth-area: rounded line, area to zero with fading fill", () => {
+test("smooth-area: rounded line, area to zero with fading opacity mask", () => {
   const svg = renderGraphSVG({ data: data([100, 300, -2000, -1800, 1900, 50]), width: 300, height: 80, type: "smooth-area", color: "#0ea5e9", fillOpacity: 0.6 });
-  assert.match(svg, /<path class="area"[^>]*fill:url\(#sgbc-afill\)/);
+  assert.match(svg, /<path class="area"[^>]*mask="url\(#sgbc-amask\)"/);
   assert.match(svg, /class="line" d="M[^"]*C/);
-  assert.match(svg, /stop-opacity:0.04/, "almost transparent at the zero line");
-  assert.match(svg, /stop-opacity:0.6/, "full strength far from zero");
+  assert.match(svg, /id="sgbc-ramp".*stop-opacity:0.04/, "almost transparent at the zero line");
+  assert.match(svg, /id="sgbc-ramp".*stop-opacity:0.6/, "full strength far from zero");
 });
 
-test("sign colors: hard switch exactly at the zero line, bars by sign", () => {
+test("sign colors: hard switch exactly at the zero line (line, area and bars)", () => {
   const sign = { above: "purple", below: "green", at: 0 };
-  // scale -100..100 (manual) => zero line in the middle (offset 0.5)
+  // scale -100..100 (manual) => zero line at y = 50 of 100
   const svg = renderGraphSVG({ data: data([50, -50, 80]), width: 100, height: 100, type: "smooth-area", sign, min: -100, max: 100, lineWidth: 0 });
-  assert.match(svg, /id="sgbc-sign"[^>]*>.*offset="0.5" style="stop-color:purple"\/><stop offset="0.5" style="stop-color:green"/);
-  assert.match(svg, /fill:url\(#sgbc-afill\)/);
+  assert.match(svg, /id="sgbc-vert" gradientUnits="userSpaceOnUse" x1="0" y1="49" x2="0" y2="51"><stop offset="0.5" style="stop-color:purple"\/><stop offset="0.5" style="stop-color:green"\/>/);
+  assert.match(svg, /class="area"[^>]*fill:url\(#sgbc-vert\)/);
   const bars = renderGraphSVG({ data: data([5, -5]), width: 100, height: 40, type: "bar", sign });
-  assert.match(bars, /fill:purple/);
-  assert.match(bars, /fill:green/);
+  assert.match(bars, /class="bar"[^>]*fill:url\(#sgbc-vert\)/);
 });
 
 test("baseline bottom: scale fitted to data, area down to the bottom edge", () => {
@@ -114,4 +113,23 @@ test("baseline bottom: scale fitted to data, area down to the bottom edge", () =
   assert.match(area, /L[\d.]+,40L[\d.]+,40Z$/, "area closes at the bottom edge");
   const ys = [...area.matchAll(/,(-?[\d.]+)/g)].map((m) => Number(m[1])).filter((y) => y < 40);
   assert.ok(Math.min(...ys) < 5, "max value near the top (scale not starting at 0)");
+});
+
+test("vertical bands: color by height with any number of borders (hard)", () => {
+  // scale 0..30 over 0..30 px (no padding for bars) -> y = 30 - v
+  const bands = { stops: [{ value: 25, color: "red" }, { value: 15, color: "yellow" }], base: "blue" };
+  const svg = renderGraphSVG({ data: data([10, 20, 30]), width: 90, height: 30, type: "bar", min: 0, max: 30, bands });
+  const grad = svg.match(/<linearGradient id="sgbc-vert"[^>]*>(.*?)<\/linearGradient>/)[1];
+  assert.match(svg, /id="sgbc-vert" gradientUnits="userSpaceOnUse" x1="0" y1="5" x2="0" y2="15"/, "borders at 25 (y=5) and 15 (y=15)");
+  assert.deepEqual([...grad.matchAll(/stop-color:(\w+)/g)].map((m) => m[1]), ["red", "yellow", "yellow", "blue"]);
+  assert.match(svg, /class="bar"[^>]*fill:url\(#sgbc-vert\)/, "bars get the bands too (part above 15 yellow …)");
+});
+
+test("vertical bands: smooth blend and borders outside the visible range", () => {
+  const bands = { stops: [{ value: 0, color: "blue" }, { value: 15, color: "yellow" }, { value: 40, color: "red" }], base: "gray", smooth: true };
+  const svg = renderGraphSVG({ data: data([10, 12, 14]), width: 90, height: 30, type: "line", min: 10, max: 14, bands, lineWidth: 0 });
+  const grad = svg.match(/<linearGradient id="sgbc-vert"[^>]*>(.*?)<\/linearGradient>/)[1];
+  assert.deepEqual([...grad.matchAll(/stop-color:(\w+)/g)].map((m) => m[1]), ["red", "yellow", "blue"], "one stop per border");
+  assert.doesNotMatch(grad, /gray/, "no base color in smooth mode");
+  assert.doesNotMatch(svg, /NaN|Infinity/);
 });

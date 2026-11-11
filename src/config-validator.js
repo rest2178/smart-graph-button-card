@@ -16,7 +16,8 @@ import { MIN_UPDATE_INTERVAL } from "./history-provider.js";
 
 export const GRAPH_POSITIONS = ["full", "after-icon", "left", "right", "bottom", "icon-area", "custom"];
 export const COLOR_MODES = ["fixed", "state", "thresholds", "gradient", "sign"];
-export const THRESHOLD_MODES = ["current", "per-point"];
+export const THRESHOLD_MODES = ["current", "per-point", "vertical"];
+export const THRESHOLD_BLENDS = ["hard", "smooth"];
 export const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
 export const ICON_POSITIONS = ["left", "right"];
 export const ANIMATIONS = ["none", "pulse", "rotate", "blink"];
@@ -53,6 +54,7 @@ export const DEFAULTS = Object.freeze({
   unavailable_text: undefined,
   unknown_text: undefined,
   show_unavailable_badge: true,
+  show_name: true,
   icon_area: {
     enabled: true,
     shape: "circle",
@@ -121,6 +123,7 @@ export const DEFAULTS = Object.freeze({
     },
     thresholds: [],
     threshold_mode: "current",
+    threshold_blend: "hard",
     gradient: { from: "#22c55e", to: "#ef4444", direction: "vertical" },
     positive_color: "#a855f7",
     negative_color: "#22c55e",
@@ -369,6 +372,7 @@ export function validateConfig(raw) {
     }
     if (a.entity !== undefined) checkEntity(a.entity, `${key}.entity`, err);
   }
+  c.show_name = c.show_name !== false;
   c.hold_time = clamp(parseNumber(c.hold_time) ?? DEFAULT_HOLD_TIME, 200, 5000);
   c.double_tap_window = clamp(parseNumber(c.double_tap_window) ?? DEFAULT_DOUBLE_TAP_WINDOW, 100, 1000);
 
@@ -513,7 +517,8 @@ function normalizeGraph(rawGraph, c, err) {
   if (!AGGREGATIONS.includes(g.aggregation)) err(`graph.aggregation „${g.aggregation}“ ist ungültig. Erlaubt: ${AGGREGATIONS.join(", ")}.`);
   if (!FILL_MODES.includes(g.fill)) err(`graph.fill „${g.fill}“ ist ungültig. Erlaubt: ${FILL_MODES.join(", ")}.`);
   if (!COLOR_MODES.includes(g.color_mode)) err(`graph.color_mode „${g.color_mode}“ ist ungültig. Erlaubt: ${COLOR_MODES.join(", ")}.`);
-  if (!THRESHOLD_MODES.includes(g.threshold_mode)) err(`graph.threshold_mode „${g.threshold_mode}“ ist ungültig. Erlaubt: current, per-point.`);
+  if (!THRESHOLD_MODES.includes(g.threshold_mode)) err(`graph.threshold_mode „${g.threshold_mode}“ ist ungültig. Erlaubt: current, per-point, vertical.`);
+  if (!THRESHOLD_BLENDS.includes(g.threshold_blend)) err(`graph.threshold_blend „${g.threshold_blend}“ ist ungültig. Erlaubt: hard, smooth.`);
 
   const hours = parseNumber(g.hours_to_show);
   if (hours === null || hours <= 0) err("graph.hours_to_show muss größer als 0 sein.");

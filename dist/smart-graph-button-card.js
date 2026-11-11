@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.3.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.4.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -191,6 +191,7 @@ ha-card.sgbc.auto-height { height: auto; min-height: 48px; }
   overflow-wrap: anywhere;
 }
 .name.overflow-clip { text-overflow: clip; }
+.name.hidden { display: none; }
 .name.multiline {
   white-space: normal;
   display: -webkit-box;
@@ -717,6 +718,8 @@ function smoothPath(pts) {
  * @param {number} o.width, o.height              pixel size of the drawing area
  * @param {string} o.type                         line|area|smooth-area|bar|column|stepped|line-bar|smooth-line-bar
  * @param {{above:string,below:string,at?:number}} [o.sign] one color above, one below a value (default 0)
+ * @param {{stops:Array<{value:number,color:string}>,base?:string,smooth?:boolean}} [o.bands]
+ *        color by height: each color applies from its value upwards, `base` below the lowest value
  * @param {string} o.color                        base color (already resolved)
  * @param {(v:number)=>string|null} [o.pointColor] per-point color function (thresholds per-point)
  * @param {{from:string,to:string,direction:string}} [o.gradient]
@@ -800,24 +803,45 @@ function renderGraphSVG(o) {
     linePaint = `url(#${id}-pp)`;
   }
 
-  // Sign mode: one color above and one below the split value (default 0).
-  // A vertical hard-stop gradient switches exactly at the split line, even
-  // in the middle of a line segment.
-  let signInfo = null;
-  if (o.sign && isDisplayable(o.sign.above) && isDisplayable(o.sign.below)) {
+  // Value bands: the color depends on the height (value) of each part of
+  // the graph – e.g. up to 15 °C blue, from 15 °C yellow, from 25 °C red.
+  // Used by threshold_mode "vertical" and the sign mode. A vertical gradient
+  // in user space switches exactly at the band borders, even in the middle of
+  // a line segment or a bar. Coordinates are not clamped, so borders outside
+  // the visible range still produce the right colors.
+  let bandDef = o.bands && Array.isArray(o.bands.stops) ? o.bands : null;
+  if (!bandDef && o.sign && isDisplayable(o.sign.above) && isDisplayable(o.sign.below)) {
     const at = Number(o.sign.at);
-    const split = Number.isFinite(at) ? at : 0;
-    const f = Math.min(1, Math.max(0, yOf(split) / height));
-    signInfo = { split, f, above: String(o.sign.above), below: String(o.sign.below) };
-    const a = escapeHtml(signInfo.above);
-    const b = escapeHtml(signInfo.below);
-    defs.push(
-      `<linearGradient id="${id}-sign" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${height}">` +
-        `<stop offset="0" style="stop-color:${a}"/><stop offset="${r4(f)}" style="stop-color:${a}"/>` +
-        `<stop offset="${r4(f)}" style="stop-color:${b}"/><stop offset="1" style="stop-color:${b}"/></linearGradient>`
-    );
-    paint = `url(#${id}-sign)`;
-    linePaint = paint;
+    bandDef = { stops: [{ value: Number.isFinite(at) ? at : 0, color: o.sign.above }], base: o.sign.below, smooth: false };
+  }
+  if (bandDef) {
+    const st = bandDef.stops
+      .map((b) => ({ v: Number(b?.value), c: b?.color }))
+      .filter((b) => Number.isFinite(b.v) && isDisplayable(b.c))
+      .sort((a, b) => a.v - b.v);
+    if (st.length) {
+      const base = isDisplayable(bandDef.base) ? String(bandDef.base) : color;
+      const yRaw = (v) => padTop + ((scale.max - v) / span) * plotH;
+      let y1 = yRaw(st[st.length - 1].v);
+      let y2 = yRaw(st[0].v);
+      if (!(y2 - y1 > 0.5)) {
+        y1 -= 1;
+        y2 += 1;
+      }
+      const off = (v) => r4((yRaw(v) - y1) / (y2 - y1));
+      const stops = [];
+      for (let i = st.length - 1; i >= 0; i--) {
+        stops.push([off(st[i].v), st[i].c]);
+        if (!bandDef.smooth) stops.push([off(st[i].v), i > 0 ? st[i - 1].c : base]);
+      }
+      defs.push(
+        `<linearGradient id="${id}-vert" gradientUnits="userSpaceOnUse" x1="0" y1="${r2(y1)}" x2="0" y2="${r2(y2)}">` +
+          stops.map(([f, c]) => `<stop offset="${f}" style="stop-color:${escapeHtml(c)}"/>`).join("") +
+          `</linearGradient>`
+      );
+      paint = `url(#${id}-vert)`;
+      linePaint = paint;
+    }
   }
 
   // Grid & axis
@@ -848,7 +872,7 @@ function renderGraphSVG(o) {
       }
       if (h <= 0) return;
       const x = i * bucketW + (bucketW - barW) / 2;
-      const fill = perPoint ? escapeHtml(colorAt(v)) : signInfo ? escapeHtml(v >= signInfo.split ? signInfo.above : signInfo.below) : paint;
+      const fill = perPoint ? escapeHtml(colorAt(v)) : paint;
       body.push(
         `<rect class="bar" x="${r2(x)}" y="${r2(top)}" width="${r2(barW)}" height="${r2(h)}"${radius ? ` rx="${r2(radius)}"` : ""} style="fill:${fill}"${barOpacity < 1 ? ` fill-opacity="${r2(barOpacity)}"` : ""}/>`
       );
@@ -856,29 +880,28 @@ function renderGraphSVG(o) {
   }
 
   // Lines / areas / steps
-  // smooth-area: fill fades from full strength (far from zero) to almost
-  // transparent at the zero line, in the line color(s).
-  let areaFill = linePaint;
+  // smooth-area: the fill fades from full strength (far from the baseline) to
+  // almost transparent at the baseline. Done with an opacity mask, so it works
+  // together with every color mode (bands, per-point, gradient, fixed).
+  const areaFill = linePaint;
   let areaOpacity = fillOpacity;
-  if (smoothArea && !perPoint && !(o.gradient && isDisplayable(o.gradient.from))) {
-    const fBase = yBase / height;
+  let areaMask = "";
+  if (smoothArea) {
+    const fBase = Math.min(1, Math.max(0, yBase / height));
     const minOp = 0.04;
     const op = (f) => {
       if (f <= fBase) return fBase <= 0 ? minOp : fillOpacity + (minOp - fillOpacity) * (f / fBase);
       return fBase >= 1 ? minOp : minOp + (fillOpacity - minOp) * ((f - fBase) / (1 - fBase));
     };
-    const top = signInfo ? signInfo.above : color;
-    const bottom = signInfo ? signInfo.below : color;
-    const entries = [{ o: 0, r: 1 }, { o: fBase, r: 1 }, { o: 1, r: 1 }];
-    if (signInfo) entries.push({ o: signInfo.f, r: 0 }, { o: signInfo.f, r: 2 });
-    entries.sort((x, y) => x.o - y.o || x.r - y.r);
-    const stops = entries.map((e) => {
-      let c = top;
-      if (signInfo) c = e.r === 0 ? top : e.r === 2 ? bottom : e.o < signInfo.f ? top : bottom;
-      return `<stop offset="${r4(e.o)}" style="stop-color:${escapeHtml(c)};stop-opacity:${r2(op(e.o))}"/>`;
-    });
-    defs.push(`<linearGradient id="${id}-afill" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${height}">${stops.join("")}</linearGradient>`);
-    areaFill = `url(#${id}-afill)`;
+    const offsets = [...new Set([0, fBase, 1])].sort((a, b) => a - b);
+    defs.push(
+      `<linearGradient id="${id}-ramp" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${height}">` +
+        offsets.map((f) => `<stop offset="${r4(f)}" style="stop-color:#fff;stop-opacity:${r2(op(f))}"/>`).join("") +
+        `</linearGradient>`,
+      `<mask id="${id}-amask" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">` +
+        `<rect x="0" y="0" width="${width}" height="${height}" style="fill:url(#${id}-ramp)"/></mask>`
+    );
+    areaMask = ` mask="url(#${id}-amask)"`;
     areaOpacity = 1;
   }
 
@@ -911,7 +934,7 @@ function renderGraphSVG(o) {
       areaPaths.push(`${d}L${r2(pts[pts.length - 1][0])},${r2(yBase)}L${r2(pts[0][0])},${r2(yBase)}Z`);
     }
     if (type === "area" || type === "stepped" || smoothArea) {
-      for (const d of areaPaths) body.push(`<path class="area" d="${d}" style="fill:${areaFill}" fill-opacity="${r2(areaOpacity)}" stroke="none"/>`);
+      for (const d of areaPaths) body.push(`<path class="area" d="${d}" style="fill:${areaFill}" fill-opacity="${r2(areaOpacity)}" stroke="none"${areaMask}/>`);
     }
     if (lineWidth > 0) {
       for (const d of linePaths) {
@@ -2072,7 +2095,8 @@ const { MIN_UPDATE_INTERVAL } = __m_history_provider_js;
 
 const GRAPH_POSITIONS = ["full", "after-icon", "left", "right", "bottom", "icon-area", "custom"];
 const COLOR_MODES = ["fixed", "state", "thresholds", "gradient", "sign"];
-const THRESHOLD_MODES = ["current", "per-point"];
+const THRESHOLD_MODES = ["current", "per-point", "vertical"];
+const THRESHOLD_BLENDS = ["hard", "smooth"];
 const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
 const ICON_POSITIONS = ["left", "right"];
 const ANIMATIONS = ["none", "pulse", "rotate", "blink"];
@@ -2109,6 +2133,7 @@ const DEFAULTS = Object.freeze({
   unavailable_text: undefined,
   unknown_text: undefined,
   show_unavailable_badge: true,
+  show_name: true,
   icon_area: {
     enabled: true,
     shape: "circle",
@@ -2177,6 +2202,7 @@ const DEFAULTS = Object.freeze({
     },
     thresholds: [],
     threshold_mode: "current",
+    threshold_blend: "hard",
     gradient: { from: "#22c55e", to: "#ef4444", direction: "vertical" },
     positive_color: "#a855f7",
     negative_color: "#22c55e",
@@ -2425,6 +2451,7 @@ function validateConfig(raw) {
     }
     if (a.entity !== undefined) checkEntity(a.entity, `${key}.entity`, err);
   }
+  c.show_name = c.show_name !== false;
   c.hold_time = clamp(parseNumber(c.hold_time) ?? DEFAULT_HOLD_TIME, 200, 5000);
   c.double_tap_window = clamp(parseNumber(c.double_tap_window) ?? DEFAULT_DOUBLE_TAP_WINDOW, 100, 1000);
 
@@ -2569,7 +2596,8 @@ function normalizeGraph(rawGraph, c, err) {
   if (!AGGREGATIONS.includes(g.aggregation)) err(`graph.aggregation „${g.aggregation}“ ist ungültig. Erlaubt: ${AGGREGATIONS.join(", ")}.`);
   if (!FILL_MODES.includes(g.fill)) err(`graph.fill „${g.fill}“ ist ungültig. Erlaubt: ${FILL_MODES.join(", ")}.`);
   if (!COLOR_MODES.includes(g.color_mode)) err(`graph.color_mode „${g.color_mode}“ ist ungültig. Erlaubt: ${COLOR_MODES.join(", ")}.`);
-  if (!THRESHOLD_MODES.includes(g.threshold_mode)) err(`graph.threshold_mode „${g.threshold_mode}“ ist ungültig. Erlaubt: current, per-point.`);
+  if (!THRESHOLD_MODES.includes(g.threshold_mode)) err(`graph.threshold_mode „${g.threshold_mode}“ ist ungültig. Erlaubt: current, per-point, vertical.`);
+  if (!THRESHOLD_BLENDS.includes(g.threshold_blend)) err(`graph.threshold_blend „${g.threshold_blend}“ ist ungültig. Erlaubt: hard, smooth.`);
 
   const hours = parseNumber(g.hours_to_show);
   if (hours === null || hours <= 0) err("graph.hours_to_show muss größer als 0 sein.");
@@ -2637,7 +2665,7 @@ function normalizeGraph(rawGraph, c, err) {
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }
-return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, validateConfig, fadeLength };
+return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, validateConfig, fadeLength };
 })();
 
 // ---- src/color-utils.js
@@ -2747,7 +2775,12 @@ const COLOR_MODES = [
 ];
 const THRESHOLD_MODES = [
   ["per-point", "Jeder Wert in eigener Farbe"],
+  ["vertical", "Nach Höhe im Graph (Farbbänder)"],
   ["current", "Ganzer Graph nach aktuellem Wert"],
+];
+const THRESHOLD_BLENDS = [
+  ["hard", "Harte Grenze"],
+  ["smooth", "Weicher Verlauf"],
 ];
 const GRADIENT_DIRECTIONS = [
   ["vertical", "Vertikal (unten → oben)"],
@@ -2784,6 +2817,8 @@ const LABELS = {
   graph_fade_end: "Weicher Übergang am Ende (rechts)",
   graph_color_mode: "Farbmodus",
   graph_threshold_mode: "Anwendung",
+  graph_threshold_blend: "Übergang zwischen den Farben",
+  show_name: "Name anzeigen",
   graph_gradient_direction: "Richtung",
   state_background_enabled: "Statushintergrund aktivieren",
   tap_action: "Tap-Aktion",
@@ -2809,6 +2844,7 @@ function mainSchema(cfg) {
         { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
       ],
     },
+    { name: "show_name", selector: { boolean: {} } },
     {
       type: "expandable",
       name: "values_section",
@@ -2856,9 +2892,10 @@ function mainSchema(cfg) {
   ];
 }
 
-function graphColorSchema(mode) {
+function graphColorSchema(mode, thresholdMode) {
   const extra = [];
   if (mode === "thresholds") extra.push({ name: "graph_threshold_mode", selector: { select: { mode: "dropdown", options: options(THRESHOLD_MODES) } } });
+  if (mode === "thresholds" && thresholdMode === "vertical") extra.push({ name: "graph_threshold_blend", selector: { select: { mode: "dropdown", options: options(THRESHOLD_BLENDS) } } });
   if (mode === "gradient") extra.push({ name: "graph_gradient_direction", selector: { select: { mode: "dropdown", options: options(GRADIENT_DIRECTIONS) } } });
   return [{ type: "grid", name: "", schema: [{ name: "graph_color_mode", selector: { select: { mode: "dropdown", options: options(COLOR_MODES) } } }, ...extra] }];
 }
@@ -2942,6 +2979,8 @@ function configToForm(config) {
     graph_fade_end: fadePercent(get(c, "graph.fade_end") ?? get(c, "graph.fade")),
     graph_color_mode: get(c, "graph.color_mode") || defaultColorMode(c),
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
+    graph_threshold_blend: get(c, "graph.threshold_blend") || "hard",
+    show_name: c.show_name !== false,
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
     state_background_enabled: Boolean(get(c, "state_background.enabled")),
     tap_action: c.tap_action,
@@ -2955,6 +2994,8 @@ function formToConfig(config, form) {
   const out = clone(config);
   const d = form || {};
   setPath(out, "entity", d.entity);
+  if (d.show_name === false) out.show_name = false;
+  else delete out.show_name;
   if (d.variant && out.type !== "custom:smart-graph-info-card") setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
   if (d.name !== undefined || typeof out.name === "string") setPath(out, "name", d.name);
   if (d.icon !== undefined || typeof out.icon === "string") setPath(out, "icon", d.icon);
@@ -2991,6 +3032,7 @@ function formToConfig(config, form) {
     if (mode === "thresholds") {
       const hadMode = Boolean(get(config, "graph.threshold_mode"));
       if (d.graph_threshold_mode && (d.graph_threshold_mode !== "current" || hadMode)) out.graph.threshold_mode = d.graph_threshold_mode;
+      if (d.graph_threshold_blend && (d.graph_threshold_blend !== "hard" || out.graph.threshold_blend)) out.graph.threshold_blend = d.graph_threshold_blend;
       if (!Array.isArray(out.graph.thresholds) || out.graph.thresholds.length === 0) {
         out.graph.thresholds = clone(DEFAULT_THRESHOLDS);
         if (!out.graph.threshold_mode) out.graph.threshold_mode = "per-point";
@@ -3259,7 +3301,7 @@ class SmartGraphButtonCardEditor extends EditorBase {
     body.replaceChildren();
     const c = this._config;
     const mode = get(c, "graph.color_mode") || defaultColorMode(c);
-    body.append(this._panelForm((cfg) => graphColorSchema(get(cfg, "graph.color_mode") || defaultColorMode(cfg))));
+    body.append(this._panelForm((cfg) => graphColorSchema(get(cfg, "graph.color_mode") || defaultColorMode(cfg), get(cfg, "graph.threshold_mode"))));
     if (c.graph && c.graph.enabled === false) body.append(h("p", "sgbc-ed-note", "Der Graph ist deaktiviert. Die Farben gelten, sobald er aktiviert wird."));
 
     if (mode === "fixed") {
@@ -3460,7 +3502,7 @@ const { EDITOR_TAG } = __m_smart_graph_button_card_editor_js;
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "1.4.0";
 
 let instanceCounter = 0;
 
@@ -3861,7 +3903,7 @@ class SmartGraphButtonCard extends HTMLElement {
       content.classList.add("info-layout");
     }
     const info = el("div", "info");
-    const name = el("div", "name");
+    const name = el("div", `name${c.show_name ? "" : " hidden"}`);
     if (c.name_style.overflow === "wrap" || c.name_style.max_lines > 1) name.classList.add("multiline");
     if (c.name_style.overflow === "clip") name.classList.add("overflow-clip");
     const values = el("div", `values${c.values.layout === "stacked" ? " stacked" : ""}`);
@@ -4264,6 +4306,12 @@ class SmartGraphButtonCard extends HTMLElement {
         color = resolveColor(g.colors, group, customClass) || base;
         break;
       case "thresholds":
+        if (g.threshold_mode === "vertical") {
+          // color by height: each threshold color from its value upwards,
+          // the normal graph color below the lowest threshold
+          const stops = this._ranges.graph.filter((r) => r.from !== null && r.from !== undefined).map((r) => ({ value: r.from, color: r.color }));
+          return { color: base, pointColor: null, gradient: null, bands: { stops, base, smooth: g.threshold_blend === "smooth" } };
+        }
         if (g.threshold_mode === "per-point") {
           const ranges = this._ranges.graph;
           pointColor = (v) => findThresholdColor(v, ranges);
@@ -4280,7 +4328,7 @@ class SmartGraphButtonCard extends HTMLElement {
           color: g.positive_color,
           pointColor: null,
           gradient: null,
-          sign: { above: g.positive_color, below: g.negative_color, at: g.split_at },
+          bands: { stops: [{ value: g.split_at, color: g.positive_color }], base: g.negative_color, smooth: false },
         };
       case "gradient":
         gradient = g.gradient;
@@ -4312,7 +4360,7 @@ class SmartGraphButtonCard extends HTMLElement {
       aggregation: g.aggregation,
       fill: g.fill,
     });
-    const { color, pointColor, gradient, sign } = this._graphColors(data);
+    const { color, pointColor, gradient, bands } = this._graphColors(data);
     const locale = getNumberLocale(this._hass);
     const svg = renderGraphSVG({
       data,
@@ -4322,7 +4370,7 @@ class SmartGraphButtonCard extends HTMLElement {
       color,
       pointColor,
       gradient,
-      sign,
+      bands,
       baseline: g.baseline,
       min: g.min,
       max: g.max,

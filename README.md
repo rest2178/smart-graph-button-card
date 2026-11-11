@@ -177,6 +177,7 @@ Alle Optionen sind optional, außer `entity`. CSS-Längen dürfen als Zahl (wird
 | `thresholds` | object | – | Grenzwertfarben für mehrere Elemente (siehe unten) |
 | `unavailable_text` | string | natives HA-Format | Text für `unavailable` |
 | `unknown_text` | string | natives HA-Format | Text für `unknown` |
+| `show_name` | bool | `true` | Name anzeigen (`false` blendet ihn aus, z. B. bei der Info-Karte) |
 | `show_unavailable_badge` | bool | `true` | Warn-Badge am Symbol bei `unavailable`/`unknown` oder fehlendem Entity |
 | `hold_time` | number (ms) | `500` | Dauer bis zum Hold (200–5000) |
 | `double_tap_window` | number (ms) | `250` | Zeitfenster für Double-Tap (100–1000) |
@@ -346,7 +347,8 @@ value_2:
 | `color` | `var(--sgbc-graph-color)` | Farbe für `fixed` und Rückfallfarbe. `auto` wählt die Farbe nach Sensortyp |
 | `colors` | HA-Variablen | Map je Zustand für `state` |
 | `thresholds` | `[]` | `[{value, color}, …]` für `thresholds`, beliebig viele Einträge |
-| `threshold_mode` | `current` | `current` oder `per-point` |
+| `threshold_mode` | `current` | `current` (ganzer Graph nach aktuellem Wert), `per-point` (jeder Wert eigene Farbe) oder `vertical` (Farbbänder nach Höhe) |
+| `threshold_blend` | `hard` | Bei `vertical`: `hard` (harte Grenze) oder `smooth` (weicher Verlauf) |
 | `gradient` | grün → rot, vertikal | `{from, to, direction: vertical \| horizontal}` |
 | `positive_color` | `#a855f7` | Farbe über `split_at` bei `color_mode: sign` |
 | `negative_color` | `#22c55e` | Farbe unter `split_at` bei `color_mode: sign` |
@@ -496,6 +498,21 @@ graph:
 ```
 
 Bei `per-point` wird jeder Balken einzeln eingefärbt. Linien und Flächen erhalten Segmentfarben über einen horizontalen Verlauf mit harten Übergängen.
+
+**Farbbänder nach Höhe (`threshold_mode: vertical`).** Die Farbe richtet sich danach, auf welcher Höhe ein Teil des Graphen liegt. Eine Kurve, die von 12 °C auf 27 °C steigt, ist unten blau, ab der 15-Grad-Höhe gelb und ab 25 Grad rot. Das gilt für Linie, Fläche und Balken. Beliebig viele Grenzen sind möglich, jede Farbe gilt **ab** ihrem Wert:
+
+```yaml
+graph:
+  color_mode: thresholds
+  threshold_mode: vertical
+  threshold_blend: hard        # oder smooth für einen weichen Verlauf
+  thresholds:
+    - { value: -40, color: "#3b82f6" }   # bis 15 °C: blau
+    - { value: 15, color: "#eab308" }    # 15 bis unter 25 °C: gelb
+    - { value: 25, color: "#ef4444" }    # ab 25 °C: rot
+```
+
+Unterhalb der kleinsten Grenze gilt die normale Graphfarbe. Deshalb steht oben für „blau“ ein sehr niedriger Wert. Bei `smooth` ist die Farbe genau beim Wert erreicht, dazwischen wird weich übergeblendet. Grenzen außerhalb des sichtbaren Bereichs werden korrekt berücksichtigt.
 
 **Über/Unter Null (`sign`).** Zum Beispiel für Netzbezug (positiv) und Einspeisung (negativ). Linie und Fläche wechseln die Farbe genau an der Nulllinie, auch mitten in einem Linienstück. Balken werden nach Vorzeichen eingefärbt.
 

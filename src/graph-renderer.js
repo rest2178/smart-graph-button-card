@@ -101,6 +101,8 @@ export function smoothPath(pts) {
  * @param {number} o.width, o.height              pixel size of the drawing area
  * @param {string} o.type                         line|area|smooth-area|bar|column|stepped|line-bar|smooth-line-bar
  * @param {{above:string,below:string,at?:number}} [o.sign] one color above, one below a value (default 0)
+ * @param {{stops:Array<{value:number,color:string}>,base?:string,smooth?:boolean}} [o.bands]
+ *        color by height: each color applies from its value upwards, `base` below the lowest value
  * @param {string} o.color                        base color (already resolved)
  * @param {(v:number)=>string|null} [o.pointColor] per-point color function (thresholds per-point)
  * @param {{from:string,to:string,direction:string}} [o.gradient]
@@ -184,24 +186,45 @@ export function renderGraphSVG(o) {
     linePaint = `url(#${id}-pp)`;
   }
 
-  // Sign mode: one color above and one below the split value (default 0).
-  // A vertical hard-stop gradient switches exactly at the split line, even
-  // in the middle of a line segment.
-  let signInfo = null;
-  if (o.sign && isDisplayable(o.sign.above) && isDisplayable(o.sign.below)) {
+  // Value bands: the color depends on the height (value) of each part of
+  // the graph – e.g. up to 15 °C blue, from 15 °C yellow, from 25 °C red.
+  // Used by threshold_mode "vertical" and the sign mode. A vertical gradient
+  // in user space switches exactly at the band borders, even in the middle of
+  // a line segment or a bar. Coordinates are not clamped, so borders outside
+  // the visible range still produce the right colors.
+  let bandDef = o.bands && Array.isArray(o.bands.stops) ? o.bands : null;
+  if (!bandDef && o.sign && isDisplayable(o.sign.above) && isDisplayable(o.sign.below)) {
     const at = Number(o.sign.at);
-    const split = Number.isFinite(at) ? at : 0;
-    const f = Math.min(1, Math.max(0, yOf(split) / height));
-    signInfo = { split, f, above: String(o.sign.above), below: String(o.sign.below) };
-    const a = escapeHtml(signInfo.above);
-    const b = escapeHtml(signInfo.below);
-    defs.push(
-      `<linearGradient id="${id}-sign" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${height}">` +
-        `<stop offset="0" style="stop-color:${a}"/><stop offset="${r4(f)}" style="stop-color:${a}"/>` +
-        `<stop offset="${r4(f)}" style="stop-color:${b}"/><stop offset="1" style="stop-color:${b}"/></linearGradient>`
-    );
-    paint = `url(#${id}-sign)`;
-    linePaint = paint;
+    bandDef = { stops: [{ value: Number.isFinite(at) ? at : 0, color: o.sign.above }], base: o.sign.below, smooth: false };
+  }
+  if (bandDef) {
+    const st = bandDef.stops
+      .map((b) => ({ v: Number(b?.value), c: b?.color }))
+      .filter((b) => Number.isFinite(b.v) && isDisplayable(b.c))
+      .sort((a, b) => a.v - b.v);
+    if (st.length) {
+      const base = isDisplayable(bandDef.base) ? String(bandDef.base) : color;
+      const yRaw = (v) => padTop + ((scale.max - v) / span) * plotH;
+      let y1 = yRaw(st[st.length - 1].v);
+      let y2 = yRaw(st[0].v);
+      if (!(y2 - y1 > 0.5)) {
+        y1 -= 1;
+        y2 += 1;
+      }
+      const off = (v) => r4((yRaw(v) - y1) / (y2 - y1));
+      const stops = [];
+      for (let i = st.length - 1; i >= 0; i--) {
+        stops.push([off(st[i].v), st[i].c]);
+        if (!bandDef.smooth) stops.push([off(st[i].v), i > 0 ? st[i - 1].c : base]);
+      }
+      defs.push(
+        `<linearGradient id="${id}-vert" gradientUnits="userSpaceOnUse" x1="0" y1="${r2(y1)}" x2="0" y2="${r2(y2)}">` +
+          stops.map(([f, c]) => `<stop offset="${f}" style="stop-color:${escapeHtml(c)}"/>`).join("") +
+          `</linearGradient>`
+      );
+      paint = `url(#${id}-vert)`;
+      linePaint = paint;
+    }
   }
 
   // Grid & axis
@@ -232,7 +255,7 @@ export function renderGraphSVG(o) {
       }
       if (h <= 0) return;
       const x = i * bucketW + (bucketW - barW) / 2;
-      const fill = perPoint ? escapeHtml(colorAt(v)) : signInfo ? escapeHtml(v >= signInfo.split ? signInfo.above : signInfo.below) : paint;
+      const fill = perPoint ? escapeHtml(colorAt(v)) : paint;
       body.push(
         `<rect class="bar" x="${r2(x)}" y="${r2(top)}" width="${r2(barW)}" height="${r2(h)}"${radius ? ` rx="${r2(radius)}"` : ""} style="fill:${fill}"${barOpacity < 1 ? ` fill-opacity="${r2(barOpacity)}"` : ""}/>`
       );
@@ -240,29 +263,28 @@ export function renderGraphSVG(o) {
   }
 
   // Lines / areas / steps
-  // smooth-area: fill fades from full strength (far from zero) to almost
-  // transparent at the zero line, in the line color(s).
-  let areaFill = linePaint;
+  // smooth-area: the fill fades from full strength (far from the baseline) to
+  // almost transparent at the baseline. Done with an opacity mask, so it works
+  // together with every color mode (bands, per-point, gradient, fixed).
+  const areaFill = linePaint;
   let areaOpacity = fillOpacity;
-  if (smoothArea && !perPoint && !(o.gradient && isDisplayable(o.gradient.from))) {
-    const fBase = yBase / height;
+  let areaMask = "";
+  if (smoothArea) {
+    const fBase = Math.min(1, Math.max(0, yBase / height));
     const minOp = 0.04;
     const op = (f) => {
       if (f <= fBase) return fBase <= 0 ? minOp : fillOpacity + (minOp - fillOpacity) * (f / fBase);
       return fBase >= 1 ? minOp : minOp + (fillOpacity - minOp) * ((f - fBase) / (1 - fBase));
     };
-    const top = signInfo ? signInfo.above : color;
-    const bottom = signInfo ? signInfo.below : color;
-    const entries = [{ o: 0, r: 1 }, { o: fBase, r: 1 }, { o: 1, r: 1 }];
-    if (signInfo) entries.push({ o: signInfo.f, r: 0 }, { o: signInfo.f, r: 2 });
-    entries.sort((x, y) => x.o - y.o || x.r - y.r);
-    const stops = entries.map((e) => {
-      let c = top;
-      if (signInfo) c = e.r === 0 ? top : e.r === 2 ? bottom : e.o < signInfo.f ? top : bottom;
-      return `<stop offset="${r4(e.o)}" style="stop-color:${escapeHtml(c)};stop-opacity:${r2(op(e.o))}"/>`;
-    });
-    defs.push(`<linearGradient id="${id}-afill" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${height}">${stops.join("")}</linearGradient>`);
-    areaFill = `url(#${id}-afill)`;
+    const offsets = [...new Set([0, fBase, 1])].sort((a, b) => a - b);
+    defs.push(
+      `<linearGradient id="${id}-ramp" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${height}">` +
+        offsets.map((f) => `<stop offset="${r4(f)}" style="stop-color:#fff;stop-opacity:${r2(op(f))}"/>`).join("") +
+        `</linearGradient>`,
+      `<mask id="${id}-amask" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">` +
+        `<rect x="0" y="0" width="${width}" height="${height}" style="fill:url(#${id}-ramp)"/></mask>`
+    );
+    areaMask = ` mask="url(#${id}-amask)"`;
     areaOpacity = 1;
   }
 
@@ -295,7 +317,7 @@ export function renderGraphSVG(o) {
       areaPaths.push(`${d}L${r2(pts[pts.length - 1][0])},${r2(yBase)}L${r2(pts[0][0])},${r2(yBase)}Z`);
     }
     if (type === "area" || type === "stepped" || smoothArea) {
-      for (const d of areaPaths) body.push(`<path class="area" d="${d}" style="fill:${areaFill}" fill-opacity="${r2(areaOpacity)}" stroke="none"/>`);
+      for (const d of areaPaths) body.push(`<path class="area" d="${d}" style="fill:${areaFill}" fill-opacity="${r2(areaOpacity)}" stroke="none"${areaMask}/>`);
     }
     if (lineWidth > 0) {
       for (const d of linePaths) {

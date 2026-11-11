@@ -125,3 +125,12 @@ test("info variant: display card defaults, user values win", () => {
   assert.equal(validateConfig(base).variant, "button");
   throwsWith({ ...base, variant: "kachel" }, /variant/);
 });
+
+test("show_name and vertical threshold mode", () => {
+  assert.equal(validateConfig(base).show_name, true);
+  assert.equal(validateConfig({ ...base, show_name: false }).show_name, false);
+  const c = validateConfig({ entity: "sensor.t", graph: { color_mode: "thresholds", threshold_mode: "vertical", threshold_blend: "smooth", thresholds: [{ value: -40, color: "blue" }, { value: 15, color: "yellow" }, { value: 25, color: "red" }] } });
+  assert.equal(c.graph.threshold_mode, "vertical");
+  assert.equal(c.graph.threshold_blend, "smooth");
+  throwsWith({ entity: "sensor.t", graph: { threshold_blend: "weich" } }, /threshold_blend/);
+});

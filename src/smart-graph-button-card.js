@@ -18,7 +18,7 @@ import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.3.0";
+export const CARD_VERSION = "1.4.0";
 
 let instanceCounter = 0;
 
@@ -419,7 +419,7 @@ export class SmartGraphButtonCard extends HTMLElement {
       content.classList.add("info-layout");
     }
     const info = el("div", "info");
-    const name = el("div", "name");
+    const name = el("div", `name${c.show_name ? "" : " hidden"}`);
     if (c.name_style.overflow === "wrap" || c.name_style.max_lines > 1) name.classList.add("multiline");
     if (c.name_style.overflow === "clip") name.classList.add("overflow-clip");
     const values = el("div", `values${c.values.layout === "stacked" ? " stacked" : ""}`);
@@ -822,6 +822,12 @@ export class SmartGraphButtonCard extends HTMLElement {
         color = resolveColor(g.colors, group, customClass) || base;
         break;
       case "thresholds":
+        if (g.threshold_mode === "vertical") {
+          // color by height: each threshold color from its value upwards,
+          // the normal graph color below the lowest threshold
+          const stops = this._ranges.graph.filter((r) => r.from !== null && r.from !== undefined).map((r) => ({ value: r.from, color: r.color }));
+          return { color: base, pointColor: null, gradient: null, bands: { stops, base, smooth: g.threshold_blend === "smooth" } };
+        }
         if (g.threshold_mode === "per-point") {
           const ranges = this._ranges.graph;
           pointColor = (v) => findThresholdColor(v, ranges);
@@ -838,7 +844,7 @@ export class SmartGraphButtonCard extends HTMLElement {
           color: g.positive_color,
           pointColor: null,
           gradient: null,
-          sign: { above: g.positive_color, below: g.negative_color, at: g.split_at },
+          bands: { stops: [{ value: g.split_at, color: g.positive_color }], base: g.negative_color, smooth: false },
         };
       case "gradient":
         gradient = g.gradient;
@@ -870,7 +876,7 @@ export class SmartGraphButtonCard extends HTMLElement {
       aggregation: g.aggregation,
       fill: g.fill,
     });
-    const { color, pointColor, gradient, sign } = this._graphColors(data);
+    const { color, pointColor, gradient, bands } = this._graphColors(data);
     const locale = getNumberLocale(this._hass);
     const svg = renderGraphSVG({
       data,
@@ -880,7 +886,7 @@ export class SmartGraphButtonCard extends HTMLElement {
       color,
       pointColor,
       gradient,
-      sign,
+      bands,
       baseline: g.baseline,
       min: g.min,
       max: g.max,

@@ -1,6 +1,6 @@
 {
   "name": "smart-graph-button-card",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Self-contained Home Assistant Lovelace button card with icon, name, two values and a built-in SVG history graph. No dependencies on other custom cards.",
   "type": "module",
   "main": "dist/smart-graph-button-card.js",

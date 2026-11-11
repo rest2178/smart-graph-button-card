@@ -77,3 +77,14 @@ test("editor: info card graph enabled by default, can be switched off", () => {
   const btn = formToConfig({ entity: "sensor.t" }, { ...configToForm({ entity: "sensor.t" }), variant: "info" });
   assert.equal(btn.variant, "info");
 });
+
+test("editor: show_name toggle and threshold blend", () => {
+  const cfg = { entity: "sensor.t", graph: { color_mode: "thresholds", threshold_mode: "vertical", thresholds: [{ value: 15, color: "yellow" }] } };
+  const form = configToForm(cfg);
+  assert.equal(form.show_name, true);
+  assert.equal(form.graph_threshold_blend, "hard");
+  const out = formToConfig(cfg, { ...form, show_name: false, graph_threshold_blend: "smooth" });
+  assert.equal(out.show_name, false);
+  assert.equal(out.graph.threshold_blend, "smooth");
+  assert.equal(formToConfig(out, { ...configToForm(out), show_name: true }).show_name, undefined);
+});
