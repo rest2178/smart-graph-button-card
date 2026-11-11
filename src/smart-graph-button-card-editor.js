@@ -16,6 +16,19 @@ const VARIANTS = [
   ["info", "Info-Karte (nur Anzeige)"],
 ];
 
+const VALUE_POSITIONS = [
+  ["top-left", "Oben links (unter dem Namen)"],
+  ["top-center", "Oben mittig"],
+  ["top-right", "Oben rechts"],
+  ["middle-left", "Mitte links"],
+  ["middle-center", "Mitte"],
+  ["middle-right", "Mitte rechts"],
+  ["bottom-left", "Unten links"],
+  ["bottom-center", "Unten mittig"],
+  ["bottom-right", "Unten rechts"],
+  ["name-right", "Neben dem Namen (rechts)"],
+];
+
 const GRAPH_TYPES = [
   ["line", "Linie"],
   ["area", "Fläche"],
@@ -88,6 +101,9 @@ const LABELS = {
   graph_threshold_mode: "Anwendung",
   graph_threshold_blend: "Übergang zwischen den Farben",
   show_name: "Name anzeigen",
+  value_position: "Position des Werts",
+  value_offset_x: "Wert verschieben – horizontal",
+  value_offset_y: "Wert verschieben – vertikal",
   graph_gradient_direction: "Richtung",
   state_background_enabled: "Statushintergrund aktivieren",
   tap_action: "Tap-Aktion",
@@ -114,6 +130,19 @@ function mainSchema(cfg) {
       ],
     },
     { name: "show_name", selector: { boolean: {} } },
+    ...(isInfoConfig(cfg)
+      ? [
+          { name: "value_position", selector: { select: { mode: "dropdown", options: options(VALUE_POSITIONS) } } },
+          {
+            type: "grid",
+            name: "",
+            schema: [
+              { name: "value_offset_x", selector: { number: { min: -60, max: 60, step: 1, mode: "slider", unit_of_measurement: "px" } } },
+              { name: "value_offset_y", selector: { number: { min: -30, max: 30, step: 1, mode: "slider", unit_of_measurement: "px" } } },
+            ],
+          },
+        ]
+      : []),
     {
       type: "expandable",
       name: "values_section",
@@ -217,6 +246,13 @@ const clone = (v) => JSON.parse(JSON.stringify(v ?? {}));
 const isInfoConfig = (c) => c?.variant === "info" || c?.type === "custom:smart-graph-info-card";
 const defaultColorMode = (c) => (isInfoConfig(c) ? "fixed" : "state");
 
+/** Offset in px as number for the slider (0 when unset, undefined for other units). */
+function pxNumber(value) {
+  if (value === undefined || value === null) return 0;
+  const m = /^(-?\d*\.?\d+)(px)?$/.exec(String(value).trim());
+  return m ? Number(m[1]) : undefined;
+}
+
 /** Fade value as percent number for the slider (px values are left to YAML). */
 function fadePercent(value) {
   if (value === undefined || value === null || value === false) return 0;
@@ -250,6 +286,9 @@ export function configToForm(config) {
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
     graph_threshold_blend: get(c, "graph.threshold_blend") || "hard",
     show_name: c.show_name !== false,
+    value_position: c.value_position || "top-left",
+    value_offset_x: pxNumber(get(c, "value_offset.x")),
+    value_offset_y: pxNumber(get(c, "value_offset.y")),
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
     state_background_enabled: Boolean(get(c, "state_background.enabled")),
     tap_action: c.tap_action,
@@ -263,6 +302,13 @@ export function formToConfig(config, form) {
   const out = clone(config);
   const d = form || {};
   setPath(out, "entity", d.entity);
+  for (const axis of ["x", "y"]) {
+    const v = d[`value_offset_${axis}`];
+    if (typeof v === "number" && v !== pxNumber(get(config, `value_offset.${axis}`))) setPath(out, `value_offset.${axis}`, v === 0 ? undefined : v);
+  }
+  pruneEmpty(out, "value_offset.x");
+  if (d.value_position && d.value_position !== "top-left") out.value_position = d.value_position;
+  else if (d.value_position === "top-left") delete out.value_position;
   if (d.show_name === false) out.show_name = false;
   else delete out.show_name;
   if (d.variant && out.type !== "custom:smart-graph-info-card") setPath(out, "variant", d.variant === "button" ? undefined : d.variant);

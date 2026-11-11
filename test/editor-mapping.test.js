@@ -88,3 +88,23 @@ test("editor: show_name toggle and threshold blend", () => {
   assert.equal(out.graph.threshold_blend, "smooth");
   assert.equal(formToConfig(out, { ...configToForm(out), show_name: true }).show_name, undefined);
 });
+
+test("editor: value_position only written when not default", () => {
+  const cfg = { type: "custom:smart-graph-info-card", entity: "sensor.t" };
+  const form = configToForm(cfg);
+  assert.equal(form.value_position, "top-left");
+  assert.equal(formToConfig(cfg, form).value_position, undefined);
+  const moved = formToConfig(cfg, { ...form, value_position: "bottom-right" });
+  assert.equal(moved.value_position, "bottom-right");
+  assert.equal(formToConfig(moved, { ...configToForm(moved), value_position: "top-left" }).value_position, undefined);
+});
+
+test("editor: value offset sliders", () => {
+  const cfg = { type: "custom:smart-graph-info-card", entity: "sensor.t" };
+  const form = configToForm(cfg);
+  assert.equal(form.value_offset_x, 0);
+  const out = formToConfig(cfg, { ...form, value_offset_y: -6 });
+  assert.deepEqual(out.value_offset, { y: -6 });
+  const back = formToConfig(out, { ...configToForm(out), value_offset_y: 0 });
+  assert.equal(back.value_offset, undefined);
+});

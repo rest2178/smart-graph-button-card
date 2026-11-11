@@ -18,7 +18,7 @@ import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.4.0";
+export const CARD_VERSION = "1.5.0";
 
 let instanceCounter = 0;
 
@@ -439,9 +439,18 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (isInfo) {
       // info layout: [icon name] on top, large value below
       const head = el("div", "info-head");
+      // no name and no icon: drop the header row so the value can use the full height
+      if (!c.show_name && !iconWrap && c.value_position !== "name-right") head.classList.add("hidden");
       if (iconWrap) head.append(iconWrap);
       head.append(name);
-      info.append(head, values);
+      if (c.value_position === "name-right") {
+        head.append(values); // value in the header row, right of the name
+        info.append(head);
+      } else {
+        const [v, hz] = c.value_position.split("-");
+        content.classList.add(`vpos-v-${v}`, `vpos-h-${hz}`);
+        info.append(head, values);
+      }
       content.append(info);
     } else {
       info.append(name, values);
@@ -482,6 +491,10 @@ export class SmartGraphButtonCard extends HTMLElement {
     setVar("--sgbc-name-lines", c.name_style.overflow === "wrap" && c.name_style.max_lines === 1 ? 2 : c.name_style.max_lines);
     setVar("--sgbc-values-gap", c.values.gap);
     setVar("--sgbc-values-size", c.values.font_size);
+    if (isInfo) {
+      setVar("--sgbc-value-dx", c.value_offset.x);
+      setVar("--sgbc-value-dy", c.value_offset.y);
+    }
     for (const i of [1, 2]) {
       const v = c[`value_${i}`];
       if (!v) continue;

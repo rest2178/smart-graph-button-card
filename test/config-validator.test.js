@@ -134,3 +134,17 @@ test("show_name and vertical threshold mode", () => {
   assert.equal(c.graph.threshold_blend, "smooth");
   throwsWith({ entity: "sensor.t", graph: { threshold_blend: "weich" } }, /threshold_blend/);
 });
+
+test("info value_position", () => {
+  assert.equal(validateConfig({ entity: "sensor.t", variant: "info" }).value_position, "top-left");
+  for (const p of ["middle-center", "bottom-right", "name-right"]) {
+    assert.equal(validateConfig({ entity: "sensor.t", variant: "info", value_position: p }).value_position, p);
+  }
+  throwsWith({ entity: "sensor.t", variant: "info", value_position: "oben" }, /value_position/);
+});
+
+test("info value_offset", () => {
+  const c = validateConfig({ entity: "sensor.t", variant: "info", value_offset: { y: -6 } });
+  assert.deepEqual(c.value_offset, { x: "0px", y: "-6px" });
+  throwsWith({ entity: "sensor.t", variant: "info", value_offset: { x: "links" } }, /value_offset\.x/);
+});

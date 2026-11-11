@@ -236,6 +236,15 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 }
 .info-layout .info { justify-content: flex-start; gap: 1px; }
 .info-layout .value-1 .unit { margin-left: 0; }
+/* value position (info card) */
+.info-layout .info { flex: 1 1 auto; min-height: 0; }
+.vpos-v-middle .values { margin-top: auto; margin-bottom: auto; }
+.vpos-v-bottom .values { margin-top: auto; }
+.vpos-h-center .values { align-self: center; max-width: 100%; }
+.vpos-h-right .values { align-self: flex-end; max-width: 100%; }
+.info-head .values { flex: 0 1 auto; margin-left: auto; max-width: 65%; }
+.info-layout .values { transform: translate(var(--sgbc-value-dx, 0px), var(--sgbc-value-dy, 0px)); }
+.info-head.hidden { display: none; }
 .info-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .info-head .name { flex: 1; }
 .info-layout .icon-area { overflow: visible; }

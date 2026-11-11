@@ -136,6 +136,24 @@ Die Info-Karte nutzt alle Optionen der Button-Karte, hat aber eigene Standardwer
 | `tap_action` / `hold_action` | `more-info` / `none` |
 | `layout` | Höhe 64 px wie der Button, `padding: 8px 10px`, keine Mindestbreite |
 
+**Position des Werts** (`value_position`, im Editor „Position des Werts“):
+
+| Wert | Lage |
+| --- | --- |
+| `top-left` (Standard), `top-center`, `top-right` | direkt unter dem Namen: links, mittig oder rechts |
+| `middle-left`, `middle-center`, `middle-right` | vertikal mittig im freien Bereich unter dem Namen |
+| `bottom-left`, `bottom-center`, `bottom-right` | am unteren Rand |
+| `name-right` | in der Kopfzeile rechts neben dem Namen; darunter bleibt mehr Platz für den Graphen |
+
+Bei der Standardhöhe von 64 px füllen Name und großer Wert die Karte fast aus. „Oben“, „Mitte“ und „unten“ unterscheiden sich daher erst bei höheren Karten (z. B. `layout: { height: 90px }`) deutlich, oder wenn Name und Symbol ausgeblendet sind (`show_name: false`, `icon_area: false`). Zusätzlich lässt sich der Wert mit `value_offset` frei verschieben, im Editor mit zwei Schiebereglern:
+
+```yaml
+value_position: top-right
+value_offset:
+  x: -4    # px, negativ = nach links
+  y: 6     # px, positiv = nach unten
+```
+
 Die Schriftgrößen von Name und Wert wachsen mit der Kartenbreite (maximal 24 px für den Wert). Dadurch passen auch auf dem Handy 4 Karten nebeneinander. Mit `value_1.font_size` und `name_style.font_size` lassen sich feste Größen setzen. In Sections-Dashboards belegt die Info-Karte standardmäßig 3 von 12 Spalten, also 4 pro Zeile. Ein Beispiel mit 4 Karten in einem `horizontal-stack` steht in [`examples/info-cards.yaml`](examples/info-cards.yaml).
 
 Mit `variant: info` lässt sich die Info-Darstellung auch für `custom:smart-graph-button-card` einschalten. Im Editor heißt das „Darstellung → Info-Karte“.

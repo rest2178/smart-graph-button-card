@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.4.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.5.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -240,6 +240,15 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 }
 .info-layout .info { justify-content: flex-start; gap: 1px; }
 .info-layout .value-1 .unit { margin-left: 0; }
+/* value position (info card) */
+.info-layout .info { flex: 1 1 auto; min-height: 0; }
+.vpos-v-middle .values { margin-top: auto; margin-bottom: auto; }
+.vpos-v-bottom .values { margin-top: auto; }
+.vpos-h-center .values { align-self: center; max-width: 100%; }
+.vpos-h-right .values { align-self: flex-end; max-width: 100%; }
+.info-head .values { flex: 0 1 auto; margin-left: auto; max-width: 65%; }
+.info-layout .values { transform: translate(var(--sgbc-value-dx, 0px), var(--sgbc-value-dy, 0px)); }
+.info-head.hidden { display: none; }
 .info-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .info-head .name { flex: 1; }
 .info-layout .icon-area { overflow: visible; }
@@ -2097,6 +2106,13 @@ const GRAPH_POSITIONS = ["full", "after-icon", "left", "right", "bottom", "icon-
 const COLOR_MODES = ["fixed", "state", "thresholds", "gradient", "sign"];
 const THRESHOLD_MODES = ["current", "per-point", "vertical"];
 const THRESHOLD_BLENDS = ["hard", "smooth"];
+/** Position of the large value in the info card ("top" = directly below the name). */
+const VALUE_POSITIONS = [
+  "top-left", "top-center", "top-right",
+  "middle-left", "middle-center", "middle-right",
+  "bottom-left", "bottom-center", "bottom-right",
+  "name-right",
+];
 const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
 const ICON_POSITIONS = ["left", "right"];
 const ANIMATIONS = ["none", "pulse", "rotate", "blink"];
@@ -2134,6 +2150,8 @@ const DEFAULTS = Object.freeze({
   unknown_text: undefined,
   show_unavailable_badge: true,
   show_name: true,
+  value_position: "top-left",
+  value_offset: { x: "0px", y: "0px" },
   icon_area: {
     enabled: true,
     shape: "circle",
@@ -2452,6 +2470,14 @@ function validateConfig(raw) {
     if (a.entity !== undefined) checkEntity(a.entity, `${key}.entity`, err);
   }
   c.show_name = c.show_name !== false;
+  if (!isPlainObject(c.value_offset)) {
+    err("value_offset muss ein Objekt mit x und y sein (z. B. x: 4, y: -6).");
+    c.value_offset = { x: "0px", y: "0px" };
+  } else {
+    c.value_offset.x = cssLen(c.value_offset.x ?? 0, "value_offset.x", err);
+    c.value_offset.y = cssLen(c.value_offset.y ?? 0, "value_offset.y", err);
+  }
+  if (!VALUE_POSITIONS.includes(c.value_position)) err(`value_position „${c.value_position}“ ist ungültig. Erlaubt: ${VALUE_POSITIONS.join(", ")}.`);
   c.hold_time = clamp(parseNumber(c.hold_time) ?? DEFAULT_HOLD_TIME, 200, 5000);
   c.double_tap_window = clamp(parseNumber(c.double_tap_window) ?? DEFAULT_DOUBLE_TAP_WINDOW, 100, 1000);
 
@@ -2665,7 +2691,7 @@ function normalizeGraph(rawGraph, c, err) {
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }
-return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, validateConfig, fadeLength };
+return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, VALUE_POSITIONS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, validateConfig, fadeLength };
 })();
 
 // ---- src/color-utils.js
@@ -2747,6 +2773,19 @@ const VARIANTS = [
   ["info", "Info-Karte (nur Anzeige)"],
 ];
 
+const VALUE_POSITIONS = [
+  ["top-left", "Oben links (unter dem Namen)"],
+  ["top-center", "Oben mittig"],
+  ["top-right", "Oben rechts"],
+  ["middle-left", "Mitte links"],
+  ["middle-center", "Mitte"],
+  ["middle-right", "Mitte rechts"],
+  ["bottom-left", "Unten links"],
+  ["bottom-center", "Unten mittig"],
+  ["bottom-right", "Unten rechts"],
+  ["name-right", "Neben dem Namen (rechts)"],
+];
+
 const GRAPH_TYPES = [
   ["line", "Linie"],
   ["area", "Fläche"],
@@ -2819,6 +2858,9 @@ const LABELS = {
   graph_threshold_mode: "Anwendung",
   graph_threshold_blend: "Übergang zwischen den Farben",
   show_name: "Name anzeigen",
+  value_position: "Position des Werts",
+  value_offset_x: "Wert verschieben – horizontal",
+  value_offset_y: "Wert verschieben – vertikal",
   graph_gradient_direction: "Richtung",
   state_background_enabled: "Statushintergrund aktivieren",
   tap_action: "Tap-Aktion",
@@ -2845,6 +2887,19 @@ function mainSchema(cfg) {
       ],
     },
     { name: "show_name", selector: { boolean: {} } },
+    ...(isInfoConfig(cfg)
+      ? [
+          { name: "value_position", selector: { select: { mode: "dropdown", options: options(VALUE_POSITIONS) } } },
+          {
+            type: "grid",
+            name: "",
+            schema: [
+              { name: "value_offset_x", selector: { number: { min: -60, max: 60, step: 1, mode: "slider", unit_of_measurement: "px" } } },
+              { name: "value_offset_y", selector: { number: { min: -30, max: 30, step: 1, mode: "slider", unit_of_measurement: "px" } } },
+            ],
+          },
+        ]
+      : []),
     {
       type: "expandable",
       name: "values_section",
@@ -2948,6 +3003,13 @@ const clone = (v) => JSON.parse(JSON.stringify(v ?? {}));
 const isInfoConfig = (c) => c?.variant === "info" || c?.type === "custom:smart-graph-info-card";
 const defaultColorMode = (c) => (isInfoConfig(c) ? "fixed" : "state");
 
+/** Offset in px as number for the slider (0 when unset, undefined for other units). */
+function pxNumber(value) {
+  if (value === undefined || value === null) return 0;
+  const m = /^(-?\d*\.?\d+)(px)?$/.exec(String(value).trim());
+  return m ? Number(m[1]) : undefined;
+}
+
 /** Fade value as percent number for the slider (px values are left to YAML). */
 function fadePercent(value) {
   if (value === undefined || value === null || value === false) return 0;
@@ -2981,6 +3043,9 @@ function configToForm(config) {
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
     graph_threshold_blend: get(c, "graph.threshold_blend") || "hard",
     show_name: c.show_name !== false,
+    value_position: c.value_position || "top-left",
+    value_offset_x: pxNumber(get(c, "value_offset.x")),
+    value_offset_y: pxNumber(get(c, "value_offset.y")),
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
     state_background_enabled: Boolean(get(c, "state_background.enabled")),
     tap_action: c.tap_action,
@@ -2994,6 +3059,13 @@ function formToConfig(config, form) {
   const out = clone(config);
   const d = form || {};
   setPath(out, "entity", d.entity);
+  for (const axis of ["x", "y"]) {
+    const v = d[`value_offset_${axis}`];
+    if (typeof v === "number" && v !== pxNumber(get(config, `value_offset.${axis}`))) setPath(out, `value_offset.${axis}`, v === 0 ? undefined : v);
+  }
+  pruneEmpty(out, "value_offset.x");
+  if (d.value_position && d.value_position !== "top-left") out.value_position = d.value_position;
+  else if (d.value_position === "top-left") delete out.value_position;
   if (d.show_name === false) out.show_name = false;
   else delete out.show_name;
   if (d.variant && out.type !== "custom:smart-graph-info-card") setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
@@ -3502,7 +3574,7 @@ const { EDITOR_TAG } = __m_smart_graph_button_card_editor_js;
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.4.0";
+const CARD_VERSION = "1.5.0";
 
 let instanceCounter = 0;
 
@@ -3923,9 +3995,18 @@ class SmartGraphButtonCard extends HTMLElement {
     if (isInfo) {
       // info layout: [icon name] on top, large value below
       const head = el("div", "info-head");
+      // no name and no icon: drop the header row so the value can use the full height
+      if (!c.show_name && !iconWrap && c.value_position !== "name-right") head.classList.add("hidden");
       if (iconWrap) head.append(iconWrap);
       head.append(name);
-      info.append(head, values);
+      if (c.value_position === "name-right") {
+        head.append(values); // value in the header row, right of the name
+        info.append(head);
+      } else {
+        const [v, hz] = c.value_position.split("-");
+        content.classList.add(`vpos-v-${v}`, `vpos-h-${hz}`);
+        info.append(head, values);
+      }
       content.append(info);
     } else {
       info.append(name, values);
@@ -3966,6 +4047,10 @@ class SmartGraphButtonCard extends HTMLElement {
     setVar("--sgbc-name-lines", c.name_style.overflow === "wrap" && c.name_style.max_lines === 1 ? 2 : c.name_style.max_lines);
     setVar("--sgbc-values-gap", c.values.gap);
     setVar("--sgbc-values-size", c.values.font_size);
+    if (isInfo) {
+      setVar("--sgbc-value-dx", c.value_offset.x);
+      setVar("--sgbc-value-dy", c.value_offset.y);
+    }
     for (const i of [1, 2]) {
       const v = c[`value_${i}`];
       if (!v) continue;
