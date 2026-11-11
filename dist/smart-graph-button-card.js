@@ -224,6 +224,35 @@ ha-card.sgbc.auto-height { height: auto; min-height: 48px; }
 
 .state-unavailable .info, .state-unavailable .glyph { opacity: 0.6; }
 
+/* ---- info variant: [icon name] on top, large value + small unit below */
+.value .unit { flex: none; font-size: 0.5em; margin-left: 3px; color: var(--secondary-text-color); font-weight: 400; }
+.value .unit.hidden { display: none; }
+/* font sizes follow the card width, so 4 cards side by side still fit */
+ha-card.sgbc.variant-info { container-type: inline-size; }
+.info-layout .name { font-size: var(--sgbc-name-size, clamp(11px, 11cqi, 13px)); }
+.content.info-layout {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 0;
+}
+.info-layout .info { justify-content: flex-start; gap: 1px; }
+.info-layout .value-1 .unit { margin-left: 0; }
+.info-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.info-head .name { flex: 1; }
+.info-layout .icon-area { overflow: visible; }
+.info-layout .badge { width: 9px; height: 9px; right: -3px; bottom: -1px; --mdc-icon-size: 9px; box-shadow: none; }
+.info-layout .values { align-items: baseline; overflow: hidden; }
+.info-layout .value-1 {
+  align-items: baseline;
+  font-size: var(--sgbc-value-1-size, clamp(13px, 19cqi, 24px));
+  font-weight: var(--sgbc-value-1-weight, 400);
+  line-height: 1.15;
+  color: var(--sgbc-value-1-color, var(--sgbc-value-color, var(--primary-text-color)));
+}
+.info-layout .value-2 { font-size: var(--sgbc-value-2-size, var(--sgbc-values-size, 12px)); }
+
 .effects { z-index: 5; transition: background-color 120ms ease, box-shadow 120ms ease; }
 @media (hover: hover) {
   ha-card.sgbc:not(.no-action):hover .effects { background: color-mix(in srgb, var(--primary-text-color) 5%, transparent); }
@@ -707,7 +736,10 @@ function renderGraphSVG(o) {
   const barish = type === "bar" || type === "column" || lineBar;
   const smoothArea = type === "smooth-area";
   const filled = type === "area" || smoothArea || type === "stepped" || barish;
-  const scale = computeScale(values, { min: o.min, max: o.max, includeZero: filled });
+  // baseline "bottom": areas/bars grow from the bottom edge and the scale is
+  // fitted to the data (e.g. temperature 20–28 °C instead of 0–28 °C)
+  const bottomBase = o.baseline === "bottom";
+  const scale = computeScale(values, { min: o.min, max: o.max, includeZero: filled && !bottomBase });
 
   const padTop = type === "bar" || type === "column" ? 0 : Math.ceil(lineWidth / 2) + (o.showPoints ? 2 : 0);
   const padBottom = type === "bar" || type === "column" ? 0 : Math.ceil(lineWidth / 2);
@@ -718,7 +750,7 @@ function renderGraphSVG(o) {
     return padTop + ((scale.max - clamped) / span) * plotH;
   };
   const baseValue = Math.min(scale.max, Math.max(scale.min, 0));
-  const yBase = yOf(baseValue);
+  const yBase = bottomBase ? height : yOf(baseValue);
   const n = values.length;
   const bucketW = width / n;
   // line-bar types: line points sit on the bar centres
@@ -2048,6 +2080,8 @@ const VALUE_LAYOUTS = ["inline", "stacked"];
 const COLOR_TARGETS = ["icon", "icon-background", "graph", "card-background", "name", "value-1", "value-2"];
 const NAME_OVERFLOW = ["ellipsis", "clip", "wrap"];
 const MAX_HOURS = 8760;
+const VARIANTS = ["button", "info"];
+const GRAPH_BASELINES = ["zero", "bottom"];
 
 class ConfigError extends Error {
   constructor(errors) {
@@ -2114,6 +2148,7 @@ const DEFAULTS = Object.freeze({
     height: "35%",
     bounds: { left: "0%", top: "0%", width: "100%", height: "100%" },
     icon_offset: "0px",
+    baseline: "zero",
     hours_to_show: 24,
     max_points: 60,
     aggregation: "average",
@@ -2179,6 +2214,43 @@ const DEFAULTS = Object.freeze({
   double_tap_window: DEFAULT_DOUBLE_TAP_WINDOW,
 });
 
+/**
+ * Defaults of the info variant (pure display card, e.g. temperature or
+ * humidity): small icon + name on top, large value, graph at the bottom.
+ * User values always win over these.
+ */
+const INFO_DEFAULTS = Object.freeze({
+  icon_area: {
+    shape: "none",
+    size: "18px",
+    icon_size: "16px",
+    color: {
+      on: "var(--secondary-text-color)",
+      off: "var(--secondary-text-color)",
+      other: "var(--secondary-text-color)",
+      unavailable: "var(--disabled-text-color, #6b7280)",
+    },
+    background: { on: "transparent", off: "transparent", unavailable: "transparent" },
+  },
+  name_style: { font_weight: 500 },
+  values: { font_size: "12px" },
+  graph: {
+    type: "smooth-area",
+    position: "bottom",
+    height: "40%",
+    baseline: "bottom",
+    color_mode: "fixed",
+    color: "auto",
+    line_width: 1.5,
+    fill_opacity: 0.35,
+    opacity: 1,
+    max_points: 60,
+  },
+  layout: { padding: "8px 10px", min_width: "0px" },
+  tap_action: { action: "more-info" },
+  hold_action: { action: "none" },
+});
+
 const VALUE_DEFAULTS = Object.freeze({
   type: "state",
   prefix: "",
@@ -2199,7 +2271,12 @@ function validateConfig(raw) {
     throw new ConfigError("„entity“ fehlt. Bitte ein Haupt-Entity angeben, z. B. entity: switch.schreibtisch_1");
   }
 
-  const c = mergeDeep(DEFAULTS, raw);
+  if (raw.variant !== undefined && !VARIANTS.includes(raw.variant)) {
+    throw new ConfigError(`variant „${raw.variant}“ ist ungültig. Erlaubt: button, info.`);
+  }
+  const isInfo = raw.variant === "info";
+  const c = mergeDeep(isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : DEFAULTS, raw);
+  c.variant = isInfo ? "info" : "button";
   // arrays / maps that must not be deep-merged with defaults
   const userMapping = isPlainObject(raw.state_mapping) ? { ...raw.state_mapping } : {};
   // YAML 1.1 turns unquoted on/off keys into true/false
@@ -2291,6 +2368,10 @@ function validateConfig(raw) {
 
   // ---- values
   for (const key of ["value_1", "value_2"]) {
+    if (isInfo && key === "value_1" && raw[key] === undefined) {
+      c[key] = normalizeValue({ type: "state" }, key, err); // info card shows the main state
+      continue;
+    }
     if (raw[key] === undefined || raw[key] === null || raw[key] === false) {
       c[key] = undefined;
       continue;
@@ -2306,7 +2387,7 @@ function validateConfig(raw) {
   for (const key of ["value_1", "value_2"]) if (isPlainObject(raw[key])) checkColor(raw[key].color, `${key}.color`, err);
 
   // ---- graph
-  c.graph = normalizeGraph(raw.graph, c, err);
+  c.graph = normalizeGraph(isInfo && raw.graph === undefined ? {} : raw.graph, c, err);
 
   // ---- state background / layers
   c.state_background.enabled = Boolean(c.state_background.enabled);
@@ -2551,11 +2632,12 @@ function normalizeGraph(rawGraph, c, err) {
     else g.split_at = at;
   }
   // the faded smooth-area looks best with a stronger fill
-  if (g.type === "smooth-area" && (!isPlainObject(rawGraph) || rawGraph.fill_opacity === undefined)) g.fill_opacity = 0.6;
+  if (g.type === "smooth-area" && c.variant !== "info" && (!isPlainObject(rawGraph) || rawGraph.fill_opacity === undefined)) g.fill_opacity = 0.6;
+  if (!GRAPH_BASELINES.includes(g.baseline)) err(`graph.baseline „${g.baseline}“ ist ungültig. Erlaubt: zero, bottom.`);
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }
-return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, ConfigError, DEFAULTS, validateConfig, fadeLength };
+return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, validateConfig, fadeLength };
 })();
 
 // ---- src/color-utils.js
@@ -2632,6 +2714,11 @@ const { parseColor, toHex, applyPickedColor } = __m_color_utils_js;
 
 const EDITOR_TAG = "smart-graph-button-card-editor";
 
+const VARIANTS = [
+  ["button", "Button (schaltbar)"],
+  ["info", "Info-Karte (nur Anzeige)"],
+];
+
 const GRAPH_TYPES = [
   ["line", "Linie"],
   ["area", "Fläche"],
@@ -2678,6 +2765,7 @@ const PALETTE = ["#22c55e", "#84cc16", "#eab308", "#f97316", "#ef4444", "#dc2626
 
 const LABELS = {
   entity: "Entity",
+  variant: "Darstellung",
   name: "Name",
   icon: "Symbol",
   value_1_entity: "Wert 1 – Entity (leer = Haupt-Entity)",
@@ -2705,9 +2793,14 @@ const LABELS = {
 
 const options = (list) => list.map(([value, label]) => ({ value, label }));
 
-function mainSchema() {
+function mainSchema(cfg) {
+  // the info card element always uses variant "info"
+  const variant = cfg?.type === "custom:smart-graph-info-card"
+    ? []
+    : [{ name: "variant", selector: { select: { mode: "dropdown", options: options(VARIANTS) } } }];
   return [
     { name: "entity", required: true, selector: { entity: {} } },
+    ...variant,
     {
       type: "grid",
       name: "",
@@ -2814,6 +2907,10 @@ function pruneEmpty(obj, path) {
 
 const clone = (v) => JSON.parse(JSON.stringify(v ?? {}));
 
+/** Info cards have the graph enabled by default and other graph defaults. */
+const isInfoConfig = (c) => c?.variant === "info" || c?.type === "custom:smart-graph-info-card";
+const defaultColorMode = (c) => (isInfoConfig(c) ? "fixed" : "state");
+
 /** Fade value as percent number for the slider (px values are left to YAML). */
 function fadePercent(value) {
   if (value === undefined || value === null || value === false) return 0;
@@ -2826,6 +2923,7 @@ function configToForm(config) {
   const c = config || {};
   return {
     entity: c.entity,
+    variant: c.variant || "button",
     name: typeof c.name === "string" ? c.name : undefined,
     icon: typeof c.icon === "string" ? c.icon : undefined,
     value_1_enabled: Boolean(c.value_1),
@@ -2835,14 +2933,14 @@ function configToForm(config) {
     value_2_entity: get(c, "value_2.entity"),
     value_2_decimals: get(c, "value_2.decimals"),
     value_2_unit: get(c, "value_2.unit"),
-    graph_enabled: c.graph ? get(c, "graph.enabled") !== false : false,
+    graph_enabled: c.graph ? get(c, "graph.enabled") !== false : isInfoConfig(c),
     graph_entity: get(c, "graph.entity"),
-    graph_type: get(c, "graph.type") || "line",
-    graph_position: get(c, "graph.position") || "full",
+    graph_type: get(c, "graph.type") || (isInfoConfig(c) ? "smooth-area" : "line"),
+    graph_position: get(c, "graph.position") || (isInfoConfig(c) ? "bottom" : "full"),
     graph_hours_to_show: get(c, "graph.hours_to_show") ?? 24,
     graph_fade_start: fadePercent(get(c, "graph.fade_start") ?? get(c, "graph.fade")),
     graph_fade_end: fadePercent(get(c, "graph.fade_end") ?? get(c, "graph.fade")),
-    graph_color_mode: get(c, "graph.color_mode") || "state",
+    graph_color_mode: get(c, "graph.color_mode") || defaultColorMode(c),
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
     state_background_enabled: Boolean(get(c, "state_background.enabled")),
@@ -2857,6 +2955,7 @@ function formToConfig(config, form) {
   const out = clone(config);
   const d = form || {};
   setPath(out, "entity", d.entity);
+  if (d.variant && out.type !== "custom:smart-graph-info-card") setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
   if (d.name !== undefined || typeof out.name === "string") setPath(out, "name", d.name);
   if (d.icon !== undefined || typeof out.icon === "string") setPath(out, "icon", d.icon);
 
@@ -2875,7 +2974,7 @@ function formToConfig(config, form) {
     setPath(out, "value_2.unit", d.value_2_unit);
   } else delete out.value_2;
 
-  if (d.graph_enabled || out.graph) {
+  if (d.graph_enabled || out.graph || isInfoConfig(out)) {
     if (!out.graph || typeof out.graph !== "object") out.graph = {};
     if (d.graph_enabled) {
       setPath(out, "graph.entity", d.graph_entity);
@@ -2888,7 +2987,7 @@ function formToConfig(config, form) {
       }
     }
     const mode = d.graph_color_mode;
-    if (mode && (mode !== "state" || out.graph.color_mode)) out.graph.color_mode = mode;
+    if (mode && (mode !== defaultColorMode(out) || out.graph.color_mode)) out.graph.color_mode = mode;
     if (mode === "thresholds") {
       const hadMode = Boolean(get(config, "graph.threshold_mode"));
       if (d.graph_threshold_mode && (d.graph_threshold_mode !== "current" || hadMode)) out.graph.threshold_mode = d.graph_threshold_mode;
@@ -3159,12 +3258,12 @@ class SmartGraphButtonCardEditor extends EditorBase {
   _renderGraphColors(body) {
     body.replaceChildren();
     const c = this._config;
-    const mode = get(c, "graph.color_mode") || "state";
-    body.append(this._panelForm((cfg) => graphColorSchema(get(cfg, "graph.color_mode") || "state")));
+    const mode = get(c, "graph.color_mode") || defaultColorMode(c);
+    body.append(this._panelForm((cfg) => graphColorSchema(get(cfg, "graph.color_mode") || defaultColorMode(cfg))));
     if (c.graph && c.graph.enabled === false) body.append(h("p", "sgbc-ed-note", "Der Graph ist deaktiviert. Die Farben gelten, sobald er aktiviert wird."));
 
     if (mode === "fixed") {
-      body.append(colorField("Graph-Farbe", get(c, "graph.color"), (v) => this._set("graph.color", v), "#06b6d4"));
+      body.append(colorField("Graph-Farbe", get(c, "graph.color"), (v) => this._set("graph.color", v), isInfoConfig(c) ? "auto (nach Sensortyp)" : "#06b6d4"));
     } else if (mode === "state") {
       const grid = h("div", "sgbc-ed-grid");
       grid.append(
@@ -3360,6 +3459,7 @@ const { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx, paddingSide }
 const { EDITOR_TAG } = __m_smart_graph_button_card_editor_js;
 
 const CARD_TAG = "smart-graph-button-card";
+const INFO_CARD_TAG = "smart-graph-info-card";
 const CARD_VERSION = "1.3.0";
 
 let instanceCounter = 0;
@@ -3437,6 +3537,22 @@ function sanitizeSvg(markup) {
     return null;
   }
 }
+
+/** Graph color for `color: auto`, chosen by the sensor's device class. */
+const AUTO_COLORS = {
+  temperature: "#ef4444",
+  humidity: "#22c55e",
+  moisture: "#22c55e",
+  power: "#f59e0b",
+  energy: "#f59e0b",
+  battery: "#22c55e",
+  illuminance: "#eab308",
+  carbon_dioxide: "#a855f7",
+  pressure: "#06b6d4",
+  atmospheric_pressure: "#06b6d4",
+  wind_speed: "#06b6d4",
+  precipitation: "#3b82f6",
+};
 
 function graphKey(g) {
   return JSON.stringify([g.enabled, g.entity, g.attribute, g.hours_to_show, g.update_interval]);
@@ -3561,10 +3677,11 @@ class SmartGraphButtonCard extends HTMLElement {
 
   getGridOptions() {
     const px = cssLengthToPx(this._config?.layout?.height);
+    const info = this._config?.variant === "info";
     return {
-      columns: 6,
+      columns: info ? 3 : 6,
       rows: px !== null && px <= 56 ? 1 : "auto",
-      min_columns: 3,
+      min_columns: info ? 2 : 3,
       min_rows: 1,
     };
   }
@@ -3738,6 +3855,11 @@ class SmartGraphButtonCard extends HTMLElement {
     if (!iconWrap) content.classList.add("no-icon");
     if (c.icon_area.position === "right") content.classList.add("icon-right");
 
+    const isInfo = c.variant === "info";
+    if (isInfo) {
+      card.classList.add("variant-info");
+      content.classList.add("info-layout");
+    }
     const info = el("div", "info");
     const name = el("div", "name");
     if (c.name_style.overflow === "wrap" || c.name_style.max_lines > 1) name.classList.add("multiline");
@@ -3747,17 +3869,27 @@ class SmartGraphButtonCard extends HTMLElement {
       const wrap = el("span", `value value-${i}`);
       const icon = el("ha-icon", "hidden", { "aria-hidden": "true" });
       const text = el("span", "value-text");
-      wrap.append(icon, text);
-      return { wrap, icon, text };
+      const unit = el("span", "unit hidden");
+      wrap.append(icon, text, unit);
+      return { wrap, icon, text, unit };
     };
     const v1 = makeValue(1);
     const sep = el("span", "sep", { "aria-hidden": "true" });
     sep.textContent = c.values.separator;
     const v2 = makeValue(2);
     values.append(v1.wrap, sep, v2.wrap);
-    info.append(name, values);
-    if (iconWrap) content.append(iconWrap);
-    content.append(info);
+    if (isInfo) {
+      // info layout: [icon name] on top, large value below
+      const head = el("div", "info-head");
+      if (iconWrap) head.append(iconWrap);
+      head.append(name);
+      info.append(head, values);
+      content.append(info);
+    } else {
+      info.append(name, values);
+      if (iconWrap) content.append(iconWrap);
+      content.append(info);
+    }
 
     card.append(stateBg, graph, overlay, content, effects);
     root.append(style, card);
@@ -3785,7 +3917,8 @@ class SmartGraphButtonCard extends HTMLElement {
     setVar("--sgbc-icon-area-size", c.icon_area.size);
     setVar("--sgbc-icon-size", c.icon_area.icon_size);
     setVar("--sgbc-anim-duration", c.icon_area.animation?.duration);
-    setVar("--sgbc-name-size", c.name_style.font_size);
+    // info cards scale the name with the card width unless a size is configured
+    if (!isInfo || userSet(raw, "name_style.font_size")) setVar("--sgbc-name-size", c.name_style.font_size);
     setVar("--sgbc-name-weight", c.name_style.font_weight);
     setVar("--sgbc-name-align", c.name_style.align);
     setVar("--sgbc-name-lines", c.name_style.overflow === "wrap" && c.name_style.max_lines === 1 ? 2 : c.name_style.max_lines);
@@ -3920,13 +4053,30 @@ class SmartGraphButtonCard extends HTMLElement {
     for (const i of [1, 2]) {
       const cfg = c[`value_${i}`];
       const ref = els[`v${i}`];
-      const r = cfg ? resolveValue(cfg, hass, ctx) : null;
+      // info card: the main value is shown large with a separate, small unit
+      const splitUnit = c.variant === "info" && i === 1 && cfg && cfg.type !== "text" && !cfg.template;
+      let r = null;
+      let unitText = "";
+      if (cfg && splitUnit) {
+        r = resolveValue({ ...cfg, unit: "", use_entity_unit: false }, hass, ctx);
+        if (!r.hidden && !r.unavailable && r.numeric !== null) {
+          const src = hass?.states?.[cfg.entity || c.entity];
+          const entityUnit = cfg.type === "attribute" ? undefined : src?.attributes?.unit_of_measurement;
+          const u = cfg.use_entity_unit === false ? cfg.unit : cfg.use_entity_unit === true ? entityUnit ?? cfg.unit : cfg.unit ?? entityUnit;
+          unitText = isDisplayable(u) ? String(u) : "";
+          if (unitText) r = { ...r, aria: `${r.aria} ${unitText}` };
+        }
+      } else if (cfg) {
+        r = resolveValue(cfg, hass, ctx);
+      }
       results.push(r);
       const visible = Boolean(r && !r.hidden);
       ref.wrap.classList.toggle("hidden", !visible);
       if (!visible) continue;
       visibleCount++;
       if (ref.text.textContent !== r.text) ref.text.textContent = r.text;
+      if (ref.unit.textContent !== unitText) ref.unit.textContent = unitText;
+      ref.unit.classList.toggle("hidden", !unitText);
       if (cfg.icon) {
         ref.icon.icon = cfg.icon;
         ref.icon.setAttribute("icon", cfg.icon);
@@ -4100,7 +4250,9 @@ class SmartGraphButtonCard extends HTMLElement {
   _graphColors(data) {
     const g = this._config.graph;
     const { group, customClass, graphOverride } = this._colorState;
-    const base = isSafeCssValue(g.color) ? g.color : "var(--sgbc-graph-color, var(--primary-color, #03a9f4))";
+    const fallback = "var(--sgbc-graph-color, var(--primary-color, #03a9f4))";
+    const deviceClass = this._hass?.states?.[g.entity]?.attributes?.device_class;
+    const base = g.color === "auto" ? AUTO_COLORS[deviceClass] || fallback : isSafeCssValue(g.color) ? g.color : fallback;
     let color = base;
     let pointColor = null;
     let gradient = null;
@@ -4171,6 +4323,7 @@ class SmartGraphButtonCard extends HTMLElement {
       pointColor,
       gradient,
       sign,
+      baseline: g.baseline,
       min: g.min,
       max: g.max,
       lineWidth: g.line_width,
@@ -4193,6 +4346,24 @@ class SmartGraphButtonCard extends HTMLElement {
   }
 }
 
+/**
+ * Pure info card (e.g. temperature, humidity): same engine, info layout.
+ * type: custom:smart-graph-info-card
+ */
+class SmartGraphInfoCard extends SmartGraphButtonCard {
+  setConfig(config) {
+    super.setConfig({ ...(config || {}), variant: "info" });
+  }
+
+  static getStubConfig(hass) {
+    const states = hass?.states || {};
+    const ids = Object.keys(states);
+    const byClass = (dc) => ids.find((id) => id.startsWith("sensor.") && states[id]?.attributes?.device_class === dc);
+    const entity = byClass("temperature") || byClass("humidity") || ids.find((id) => id.startsWith("sensor.")) || "sensor.example";
+    return { entity };
+  }
+}
+
 if (!customElements.get(CARD_TAG)) {
   customElements.define(CARD_TAG, SmartGraphButtonCard);
   window.customCards = window.customCards || [];
@@ -4203,8 +4374,16 @@ if (!customElements.get(CARD_TAG)) {
     preview: true,
     documentationURL: "https://github.com/rest2178/smart-graph-button-card",
   });
+  customElements.define(INFO_CARD_TAG, SmartGraphInfoCard);
+  window.customCards.push({
+    type: INFO_CARD_TAG,
+    name: "Smart Graph Info Card",
+    description: "Reine Info-Karte für Messwerte wie Temperatur oder Luftfeuchtigkeit: Symbol, Name, großer Wert und Verlaufsgraph.",
+    preview: true,
+    documentationURL: "https://github.com/rest2178/smart-graph-button-card",
+  });
   // eslint-disable-next-line no-console
   console.info(`%c SMART-GRAPH-BUTTON-CARD %c v${CARD_VERSION} `, "color:#fff;background:#0ea5e9;font-weight:700;border-radius:3px 0 0 3px", "color:#0ea5e9;background:#e0f2fe;border-radius:0 3px 3px 0");
 }
-return { CARD_TAG, CARD_VERSION, SmartGraphButtonCard };
+return { CARD_TAG, INFO_CARD_TAG, CARD_VERSION, SmartGraphButtonCard, SmartGraphInfoCard };
 })();

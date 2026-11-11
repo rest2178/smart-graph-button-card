@@ -61,7 +61,11 @@ test("all spec examples validate", async () => {
     const docs = readFileSync(new URL(file, dir), "utf8").split(/^---$/m).filter((d) => d.trim());
     for (const doc of docs) {
       const cfg = parseSimpleYaml(doc);
-      assert.doesNotThrow(() => validateConfig(cfg), `${file}`);
+      const cards = Array.isArray(cfg.cards) ? cfg.cards : [cfg];
+      for (const card of cards) {
+        const withVariant = card.type === "custom:smart-graph-info-card" ? { ...card, variant: "info" } : card;
+        assert.doesNotThrow(() => validateConfig(withVariant), `${file}`);
+      }
     }
   }
 });
@@ -99,4 +103,25 @@ test("graph position after-icon with offset", () => {
   assert.equal(c.graph.icon_offset, "6px");
   assert.equal(validateConfig({ ...base, graph: { entity: "sensor.p" } }).graph.icon_offset, "0px");
   throwsWith({ ...base, graph: { entity: "sensor.p", icon_offset: "weit" } }, /icon_offset/);
+});
+
+test("info variant: display card defaults, user values win", () => {
+  const c = validateConfig({ entity: "sensor.temp", variant: "info" });
+  assert.equal(c.variant, "info");
+  assert.equal(c.graph.enabled, true);
+  assert.equal(c.graph.entity, "sensor.temp");
+  assert.equal(c.graph.type, "smooth-area");
+  assert.equal(c.graph.position, "bottom");
+  assert.equal(c.graph.baseline, "bottom");
+  assert.equal(c.graph.color, "auto");
+  assert.equal(c.graph.fill_opacity, 0.35);
+  assert.equal(c.value_1.type, "state");
+  assert.equal(c.tap_action.action, "more-info");
+  assert.equal(c.hold_action.action, "none");
+  assert.equal(c.layout.height, "64px", "same height as the button");
+  const custom = validateConfig({ entity: "sensor.temp", variant: "info", graph: { enabled: false }, tap_action: { action: "none" } });
+  assert.equal(custom.graph.enabled, false);
+  assert.equal(custom.tap_action.action, "none");
+  assert.equal(validateConfig(base).variant, "button");
+  throwsWith({ ...base, variant: "kachel" }, /variant/);
 });

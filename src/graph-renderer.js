@@ -120,7 +120,10 @@ export function renderGraphSVG(o) {
   const barish = type === "bar" || type === "column" || lineBar;
   const smoothArea = type === "smooth-area";
   const filled = type === "area" || smoothArea || type === "stepped" || barish;
-  const scale = computeScale(values, { min: o.min, max: o.max, includeZero: filled });
+  // baseline "bottom": areas/bars grow from the bottom edge and the scale is
+  // fitted to the data (e.g. temperature 20–28 °C instead of 0–28 °C)
+  const bottomBase = o.baseline === "bottom";
+  const scale = computeScale(values, { min: o.min, max: o.max, includeZero: filled && !bottomBase });
 
   const padTop = type === "bar" || type === "column" ? 0 : Math.ceil(lineWidth / 2) + (o.showPoints ? 2 : 0);
   const padBottom = type === "bar" || type === "column" ? 0 : Math.ceil(lineWidth / 2);
@@ -131,7 +134,7 @@ export function renderGraphSVG(o) {
     return padTop + ((scale.max - clamped) / span) * plotH;
   };
   const baseValue = Math.min(scale.max, Math.max(scale.min, 0));
-  const yBase = yOf(baseValue);
+  const yBase = bottomBase ? height : yOf(baseValue);
   const n = values.length;
   const bucketW = width / n;
   // line-bar types: line points sit on the bar centres

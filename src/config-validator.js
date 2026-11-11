@@ -24,6 +24,8 @@ export const VALUE_LAYOUTS = ["inline", "stacked"];
 export const COLOR_TARGETS = ["icon", "icon-background", "graph", "card-background", "name", "value-1", "value-2"];
 export const NAME_OVERFLOW = ["ellipsis", "clip", "wrap"];
 export const MAX_HOURS = 8760;
+export const VARIANTS = ["button", "info"];
+export const GRAPH_BASELINES = ["zero", "bottom"];
 
 export class ConfigError extends Error {
   constructor(errors) {
@@ -90,6 +92,7 @@ export const DEFAULTS = Object.freeze({
     height: "35%",
     bounds: { left: "0%", top: "0%", width: "100%", height: "100%" },
     icon_offset: "0px",
+    baseline: "zero",
     hours_to_show: 24,
     max_points: 60,
     aggregation: "average",
@@ -155,6 +158,43 @@ export const DEFAULTS = Object.freeze({
   double_tap_window: DEFAULT_DOUBLE_TAP_WINDOW,
 });
 
+/**
+ * Defaults of the info variant (pure display card, e.g. temperature or
+ * humidity): small icon + name on top, large value, graph at the bottom.
+ * User values always win over these.
+ */
+export const INFO_DEFAULTS = Object.freeze({
+  icon_area: {
+    shape: "none",
+    size: "18px",
+    icon_size: "16px",
+    color: {
+      on: "var(--secondary-text-color)",
+      off: "var(--secondary-text-color)",
+      other: "var(--secondary-text-color)",
+      unavailable: "var(--disabled-text-color, #6b7280)",
+    },
+    background: { on: "transparent", off: "transparent", unavailable: "transparent" },
+  },
+  name_style: { font_weight: 500 },
+  values: { font_size: "12px" },
+  graph: {
+    type: "smooth-area",
+    position: "bottom",
+    height: "40%",
+    baseline: "bottom",
+    color_mode: "fixed",
+    color: "auto",
+    line_width: 1.5,
+    fill_opacity: 0.35,
+    opacity: 1,
+    max_points: 60,
+  },
+  layout: { padding: "8px 10px", min_width: "0px" },
+  tap_action: { action: "more-info" },
+  hold_action: { action: "none" },
+});
+
 const VALUE_DEFAULTS = Object.freeze({
   type: "state",
   prefix: "",
@@ -175,7 +215,12 @@ export function validateConfig(raw) {
     throw new ConfigError("„entity“ fehlt. Bitte ein Haupt-Entity angeben, z. B. entity: switch.schreibtisch_1");
   }
 
-  const c = mergeDeep(DEFAULTS, raw);
+  if (raw.variant !== undefined && !VARIANTS.includes(raw.variant)) {
+    throw new ConfigError(`variant „${raw.variant}“ ist ungültig. Erlaubt: button, info.`);
+  }
+  const isInfo = raw.variant === "info";
+  const c = mergeDeep(isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : DEFAULTS, raw);
+  c.variant = isInfo ? "info" : "button";
   // arrays / maps that must not be deep-merged with defaults
   const userMapping = isPlainObject(raw.state_mapping) ? { ...raw.state_mapping } : {};
   // YAML 1.1 turns unquoted on/off keys into true/false
@@ -267,6 +312,10 @@ export function validateConfig(raw) {
 
   // ---- values
   for (const key of ["value_1", "value_2"]) {
+    if (isInfo && key === "value_1" && raw[key] === undefined) {
+      c[key] = normalizeValue({ type: "state" }, key, err); // info card shows the main state
+      continue;
+    }
     if (raw[key] === undefined || raw[key] === null || raw[key] === false) {
       c[key] = undefined;
       continue;
@@ -282,7 +331,7 @@ export function validateConfig(raw) {
   for (const key of ["value_1", "value_2"]) if (isPlainObject(raw[key])) checkColor(raw[key].color, `${key}.color`, err);
 
   // ---- graph
-  c.graph = normalizeGraph(raw.graph, c, err);
+  c.graph = normalizeGraph(isInfo && raw.graph === undefined ? {} : raw.graph, c, err);
 
   // ---- state background / layers
   c.state_background.enabled = Boolean(c.state_background.enabled);
@@ -527,7 +576,8 @@ function normalizeGraph(rawGraph, c, err) {
     else g.split_at = at;
   }
   // the faded smooth-area looks best with a stronger fill
-  if (g.type === "smooth-area" && (!isPlainObject(rawGraph) || rawGraph.fill_opacity === undefined)) g.fill_opacity = 0.6;
+  if (g.type === "smooth-area" && c.variant !== "info" && (!isPlainObject(rawGraph) || rawGraph.fill_opacity === undefined)) g.fill_opacity = 0.6;
+  if (!GRAPH_BASELINES.includes(g.baseline)) err(`graph.baseline „${g.baseline}“ ist ungültig. Erlaubt: zero, bottom.`);
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }

@@ -11,6 +11,11 @@ import { parseColor, toHex, applyPickedColor } from "./color-utils.js";
 
 export const EDITOR_TAG = "smart-graph-button-card-editor";
 
+const VARIANTS = [
+  ["button", "Button (schaltbar)"],
+  ["info", "Info-Karte (nur Anzeige)"],
+];
+
 const GRAPH_TYPES = [
   ["line", "Linie"],
   ["area", "Fläche"],
@@ -57,6 +62,7 @@ const PALETTE = ["#22c55e", "#84cc16", "#eab308", "#f97316", "#ef4444", "#dc2626
 
 const LABELS = {
   entity: "Entity",
+  variant: "Darstellung",
   name: "Name",
   icon: "Symbol",
   value_1_entity: "Wert 1 – Entity (leer = Haupt-Entity)",
@@ -84,9 +90,14 @@ const LABELS = {
 
 const options = (list) => list.map(([value, label]) => ({ value, label }));
 
-function mainSchema() {
+function mainSchema(cfg) {
+  // the info card element always uses variant "info"
+  const variant = cfg?.type === "custom:smart-graph-info-card"
+    ? []
+    : [{ name: "variant", selector: { select: { mode: "dropdown", options: options(VARIANTS) } } }];
   return [
     { name: "entity", required: true, selector: { entity: {} } },
+    ...variant,
     {
       type: "grid",
       name: "",
@@ -193,6 +204,10 @@ export function pruneEmpty(obj, path) {
 
 const clone = (v) => JSON.parse(JSON.stringify(v ?? {}));
 
+/** Info cards have the graph enabled by default and other graph defaults. */
+const isInfoConfig = (c) => c?.variant === "info" || c?.type === "custom:smart-graph-info-card";
+const defaultColorMode = (c) => (isInfoConfig(c) ? "fixed" : "state");
+
 /** Fade value as percent number for the slider (px values are left to YAML). */
 function fadePercent(value) {
   if (value === undefined || value === null || value === false) return 0;
@@ -205,6 +220,7 @@ export function configToForm(config) {
   const c = config || {};
   return {
     entity: c.entity,
+    variant: c.variant || "button",
     name: typeof c.name === "string" ? c.name : undefined,
     icon: typeof c.icon === "string" ? c.icon : undefined,
     value_1_enabled: Boolean(c.value_1),
@@ -214,14 +230,14 @@ export function configToForm(config) {
     value_2_entity: get(c, "value_2.entity"),
     value_2_decimals: get(c, "value_2.decimals"),
     value_2_unit: get(c, "value_2.unit"),
-    graph_enabled: c.graph ? get(c, "graph.enabled") !== false : false,
+    graph_enabled: c.graph ? get(c, "graph.enabled") !== false : isInfoConfig(c),
     graph_entity: get(c, "graph.entity"),
-    graph_type: get(c, "graph.type") || "line",
-    graph_position: get(c, "graph.position") || "full",
+    graph_type: get(c, "graph.type") || (isInfoConfig(c) ? "smooth-area" : "line"),
+    graph_position: get(c, "graph.position") || (isInfoConfig(c) ? "bottom" : "full"),
     graph_hours_to_show: get(c, "graph.hours_to_show") ?? 24,
     graph_fade_start: fadePercent(get(c, "graph.fade_start") ?? get(c, "graph.fade")),
     graph_fade_end: fadePercent(get(c, "graph.fade_end") ?? get(c, "graph.fade")),
-    graph_color_mode: get(c, "graph.color_mode") || "state",
+    graph_color_mode: get(c, "graph.color_mode") || defaultColorMode(c),
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
     state_background_enabled: Boolean(get(c, "state_background.enabled")),
@@ -236,6 +252,7 @@ export function formToConfig(config, form) {
   const out = clone(config);
   const d = form || {};
   setPath(out, "entity", d.entity);
+  if (d.variant && out.type !== "custom:smart-graph-info-card") setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
   if (d.name !== undefined || typeof out.name === "string") setPath(out, "name", d.name);
   if (d.icon !== undefined || typeof out.icon === "string") setPath(out, "icon", d.icon);
 
@@ -254,7 +271,7 @@ export function formToConfig(config, form) {
     setPath(out, "value_2.unit", d.value_2_unit);
   } else delete out.value_2;
 
-  if (d.graph_enabled || out.graph) {
+  if (d.graph_enabled || out.graph || isInfoConfig(out)) {
     if (!out.graph || typeof out.graph !== "object") out.graph = {};
     if (d.graph_enabled) {
       setPath(out, "graph.entity", d.graph_entity);
@@ -267,7 +284,7 @@ export function formToConfig(config, form) {
       }
     }
     const mode = d.graph_color_mode;
-    if (mode && (mode !== "state" || out.graph.color_mode)) out.graph.color_mode = mode;
+    if (mode && (mode !== defaultColorMode(out) || out.graph.color_mode)) out.graph.color_mode = mode;
     if (mode === "thresholds") {
       const hadMode = Boolean(get(config, "graph.threshold_mode"));
       if (d.graph_threshold_mode && (d.graph_threshold_mode !== "current" || hadMode)) out.graph.threshold_mode = d.graph_threshold_mode;
@@ -538,12 +555,12 @@ class SmartGraphButtonCardEditor extends EditorBase {
   _renderGraphColors(body) {
     body.replaceChildren();
     const c = this._config;
-    const mode = get(c, "graph.color_mode") || "state";
-    body.append(this._panelForm((cfg) => graphColorSchema(get(cfg, "graph.color_mode") || "state")));
+    const mode = get(c, "graph.color_mode") || defaultColorMode(c);
+    body.append(this._panelForm((cfg) => graphColorSchema(get(cfg, "graph.color_mode") || defaultColorMode(cfg))));
     if (c.graph && c.graph.enabled === false) body.append(h("p", "sgbc-ed-note", "Der Graph ist deaktiviert. Die Farben gelten, sobald er aktiviert wird."));
 
     if (mode === "fixed") {
-      body.append(colorField("Graph-Farbe", get(c, "graph.color"), (v) => this._set("graph.color", v), "#06b6d4"));
+      body.append(colorField("Graph-Farbe", get(c, "graph.color"), (v) => this._set("graph.color", v), isInfoConfig(c) ? "auto (nach Sensortyp)" : "#06b6d4"));
     } else if (mode === "state") {
       const grid = h("div", "sgbc-ed-grid");
       grid.append(

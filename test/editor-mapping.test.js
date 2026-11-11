@@ -65,3 +65,15 @@ test("editor fade sliders map to graph.fade_start / fade_end without rewriting u
   const changed = formToConfig(cfg, { ...form, graph_fade_end: 0 });
   assert.equal(changed.graph.fade_end, 0);
 });
+
+test("editor: info card graph enabled by default, can be switched off", () => {
+  const cfg = { type: "custom:smart-graph-info-card", entity: "sensor.t" };
+  const form = configToForm(cfg);
+  assert.equal(form.graph_enabled, true);
+  assert.equal(form.graph_type, "smooth-area");
+  const off = formToConfig(cfg, { ...form, graph_enabled: false });
+  assert.equal(off.graph.enabled, false);
+  assert.equal(off.variant, undefined, "info card element needs no variant key");
+  const btn = formToConfig({ entity: "sensor.t" }, { ...configToForm({ entity: "sensor.t" }), variant: "info" });
+  assert.equal(btn.variant, "info");
+});

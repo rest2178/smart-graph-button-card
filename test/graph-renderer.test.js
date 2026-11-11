@@ -107,3 +107,11 @@ test("sign colors: hard switch exactly at the zero line, bars by sign", () => {
   assert.match(bars, /fill:purple/);
   assert.match(bars, /fill:green/);
 });
+
+test("baseline bottom: scale fitted to data, area down to the bottom edge", () => {
+  const svg = renderGraphSVG({ data: data([26, 28, 27]), width: 100, height: 40, type: "smooth-area", baseline: "bottom", lineWidth: 0, color: "red", fillOpacity: 0.35 });
+  const area = svg.match(/<path class="area" d="([^"]+)"/)[1];
+  assert.match(area, /L[\d.]+,40L[\d.]+,40Z$/, "area closes at the bottom edge");
+  const ys = [...area.matchAll(/,(-?[\d.]+)/g)].map((m) => Number(m[1])).filter((y) => y < 40);
+  assert.ok(Math.min(...ys) < 5, "max value near the top (scale not starting at 0)");
+});

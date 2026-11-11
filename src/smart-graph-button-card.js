@@ -17,6 +17,7 @@ import { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx, paddingSide 
 import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
 
 export const CARD_TAG = "smart-graph-button-card";
+export const INFO_CARD_TAG = "smart-graph-info-card";
 export const CARD_VERSION = "1.3.0";
 
 let instanceCounter = 0;
@@ -94,6 +95,22 @@ function sanitizeSvg(markup) {
     return null;
   }
 }
+
+/** Graph color for `color: auto`, chosen by the sensor's device class. */
+const AUTO_COLORS = {
+  temperature: "#ef4444",
+  humidity: "#22c55e",
+  moisture: "#22c55e",
+  power: "#f59e0b",
+  energy: "#f59e0b",
+  battery: "#22c55e",
+  illuminance: "#eab308",
+  carbon_dioxide: "#a855f7",
+  pressure: "#06b6d4",
+  atmospheric_pressure: "#06b6d4",
+  wind_speed: "#06b6d4",
+  precipitation: "#3b82f6",
+};
 
 function graphKey(g) {
   return JSON.stringify([g.enabled, g.entity, g.attribute, g.hours_to_show, g.update_interval]);
@@ -218,10 +235,11 @@ export class SmartGraphButtonCard extends HTMLElement {
 
   getGridOptions() {
     const px = cssLengthToPx(this._config?.layout?.height);
+    const info = this._config?.variant === "info";
     return {
-      columns: 6,
+      columns: info ? 3 : 6,
       rows: px !== null && px <= 56 ? 1 : "auto",
-      min_columns: 3,
+      min_columns: info ? 2 : 3,
       min_rows: 1,
     };
   }
@@ -395,6 +413,11 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (!iconWrap) content.classList.add("no-icon");
     if (c.icon_area.position === "right") content.classList.add("icon-right");
 
+    const isInfo = c.variant === "info";
+    if (isInfo) {
+      card.classList.add("variant-info");
+      content.classList.add("info-layout");
+    }
     const info = el("div", "info");
     const name = el("div", "name");
     if (c.name_style.overflow === "wrap" || c.name_style.max_lines > 1) name.classList.add("multiline");
@@ -404,17 +427,27 @@ export class SmartGraphButtonCard extends HTMLElement {
       const wrap = el("span", `value value-${i}`);
       const icon = el("ha-icon", "hidden", { "aria-hidden": "true" });
       const text = el("span", "value-text");
-      wrap.append(icon, text);
-      return { wrap, icon, text };
+      const unit = el("span", "unit hidden");
+      wrap.append(icon, text, unit);
+      return { wrap, icon, text, unit };
     };
     const v1 = makeValue(1);
     const sep = el("span", "sep", { "aria-hidden": "true" });
     sep.textContent = c.values.separator;
     const v2 = makeValue(2);
     values.append(v1.wrap, sep, v2.wrap);
-    info.append(name, values);
-    if (iconWrap) content.append(iconWrap);
-    content.append(info);
+    if (isInfo) {
+      // info layout: [icon name] on top, large value below
+      const head = el("div", "info-head");
+      if (iconWrap) head.append(iconWrap);
+      head.append(name);
+      info.append(head, values);
+      content.append(info);
+    } else {
+      info.append(name, values);
+      if (iconWrap) content.append(iconWrap);
+      content.append(info);
+    }
 
     card.append(stateBg, graph, overlay, content, effects);
     root.append(style, card);
@@ -442,7 +475,8 @@ export class SmartGraphButtonCard extends HTMLElement {
     setVar("--sgbc-icon-area-size", c.icon_area.size);
     setVar("--sgbc-icon-size", c.icon_area.icon_size);
     setVar("--sgbc-anim-duration", c.icon_area.animation?.duration);
-    setVar("--sgbc-name-size", c.name_style.font_size);
+    // info cards scale the name with the card width unless a size is configured
+    if (!isInfo || userSet(raw, "name_style.font_size")) setVar("--sgbc-name-size", c.name_style.font_size);
     setVar("--sgbc-name-weight", c.name_style.font_weight);
     setVar("--sgbc-name-align", c.name_style.align);
     setVar("--sgbc-name-lines", c.name_style.overflow === "wrap" && c.name_style.max_lines === 1 ? 2 : c.name_style.max_lines);
@@ -577,13 +611,30 @@ export class SmartGraphButtonCard extends HTMLElement {
     for (const i of [1, 2]) {
       const cfg = c[`value_${i}`];
       const ref = els[`v${i}`];
-      const r = cfg ? resolveValue(cfg, hass, ctx) : null;
+      // info card: the main value is shown large with a separate, small unit
+      const splitUnit = c.variant === "info" && i === 1 && cfg && cfg.type !== "text" && !cfg.template;
+      let r = null;
+      let unitText = "";
+      if (cfg && splitUnit) {
+        r = resolveValue({ ...cfg, unit: "", use_entity_unit: false }, hass, ctx);
+        if (!r.hidden && !r.unavailable && r.numeric !== null) {
+          const src = hass?.states?.[cfg.entity || c.entity];
+          const entityUnit = cfg.type === "attribute" ? undefined : src?.attributes?.unit_of_measurement;
+          const u = cfg.use_entity_unit === false ? cfg.unit : cfg.use_entity_unit === true ? entityUnit ?? cfg.unit : cfg.unit ?? entityUnit;
+          unitText = isDisplayable(u) ? String(u) : "";
+          if (unitText) r = { ...r, aria: `${r.aria} ${unitText}` };
+        }
+      } else if (cfg) {
+        r = resolveValue(cfg, hass, ctx);
+      }
       results.push(r);
       const visible = Boolean(r && !r.hidden);
       ref.wrap.classList.toggle("hidden", !visible);
       if (!visible) continue;
       visibleCount++;
       if (ref.text.textContent !== r.text) ref.text.textContent = r.text;
+      if (ref.unit.textContent !== unitText) ref.unit.textContent = unitText;
+      ref.unit.classList.toggle("hidden", !unitText);
       if (cfg.icon) {
         ref.icon.icon = cfg.icon;
         ref.icon.setAttribute("icon", cfg.icon);
@@ -757,7 +808,9 @@ export class SmartGraphButtonCard extends HTMLElement {
   _graphColors(data) {
     const g = this._config.graph;
     const { group, customClass, graphOverride } = this._colorState;
-    const base = isSafeCssValue(g.color) ? g.color : "var(--sgbc-graph-color, var(--primary-color, #03a9f4))";
+    const fallback = "var(--sgbc-graph-color, var(--primary-color, #03a9f4))";
+    const deviceClass = this._hass?.states?.[g.entity]?.attributes?.device_class;
+    const base = g.color === "auto" ? AUTO_COLORS[deviceClass] || fallback : isSafeCssValue(g.color) ? g.color : fallback;
     let color = base;
     let pointColor = null;
     let gradient = null;
@@ -828,6 +881,7 @@ export class SmartGraphButtonCard extends HTMLElement {
       pointColor,
       gradient,
       sign,
+      baseline: g.baseline,
       min: g.min,
       max: g.max,
       lineWidth: g.line_width,
@@ -850,6 +904,24 @@ export class SmartGraphButtonCard extends HTMLElement {
   }
 }
 
+/**
+ * Pure info card (e.g. temperature, humidity): same engine, info layout.
+ * type: custom:smart-graph-info-card
+ */
+export class SmartGraphInfoCard extends SmartGraphButtonCard {
+  setConfig(config) {
+    super.setConfig({ ...(config || {}), variant: "info" });
+  }
+
+  static getStubConfig(hass) {
+    const states = hass?.states || {};
+    const ids = Object.keys(states);
+    const byClass = (dc) => ids.find((id) => id.startsWith("sensor.") && states[id]?.attributes?.device_class === dc);
+    const entity = byClass("temperature") || byClass("humidity") || ids.find((id) => id.startsWith("sensor.")) || "sensor.example";
+    return { entity };
+  }
+}
+
 if (!customElements.get(CARD_TAG)) {
   customElements.define(CARD_TAG, SmartGraphButtonCard);
   window.customCards = window.customCards || [];
@@ -857,6 +929,14 @@ if (!customElements.get(CARD_TAG)) {
     type: CARD_TAG,
     name: "Smart Graph Button Card",
     description: "Kompakte Button-Karte mit Symbol, Name, zwei Werten und integriertem Verlaufsgraphen – ohne Abhängigkeiten.",
+    preview: true,
+    documentationURL: "https://github.com/rest2178/smart-graph-button-card",
+  });
+  customElements.define(INFO_CARD_TAG, SmartGraphInfoCard);
+  window.customCards.push({
+    type: INFO_CARD_TAG,
+    name: "Smart Graph Info Card",
+    description: "Reine Info-Karte für Messwerte wie Temperatur oder Luftfeuchtigkeit: Symbol, Name, großer Wert und Verlaufsgraph.",
     preview: true,
     documentationURL: "https://github.com/rest2178/smart-graph-button-card",
   });

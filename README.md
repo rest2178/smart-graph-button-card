@@ -13,6 +13,15 @@ Eine kompakte, frei parametrierbare **Button-Karte für Home Assistant** mit Sym
 └──────────────────────────────────────────┘
 ```
 
+## Zwei Kartentypen
+
+| Typ | Zweck |
+| --- | --- |
+| `custom:smart-graph-button-card` | Schaltbare Button-Karte: Symbol, Name, zwei Werte, Graph, Aktionen |
+| `custom:smart-graph-info-card` | Reine Info-Karte für Messwerte (Temperatur, Luftfeuchtigkeit …): kleines Symbol und Name oben, großer Wert, Verlauf unten. Gleiche Höhe wie der Button, bis zu 4 nebeneinander |
+
+Beide stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
+
 ## Inhalt
 
 1. [Screenshots](#screenshots)
@@ -98,6 +107,38 @@ lovelace:
     - url: /hacsfiles/smart-graph-button-card/smart-graph-button-card.js
       type: module
 ```
+
+## Info-Karte
+
+```yaml
+type: custom:smart-graph-info-card
+entity: sensor.wohnzimmer_temperatur
+name: Temperatur
+icon: mdi:thermometer
+```
+
+```
+┌──────────────────┐
+│ 🌡 Temperatur     │
+│ 28,1 °C          │
+│ ╭─╮_╭──╮_╭╮__╭─  │  ← Verlauf, Fläche blendet nach unten aus
+└──────────────────┘
+```
+
+Die Info-Karte nutzt alle Optionen der Button-Karte, hat aber eigene Standardwerte:
+
+| Option | Standard bei der Info-Karte |
+| --- | --- |
+| `value_1` | `{type: state}` – der Zustand des Entitys, groß dargestellt, mit kleiner Einheit |
+| `graph` | aktiv, Entity = Haupt-Entity, `type: smooth-area`, `position: bottom`, `height: 40%`, `baseline: bottom`, `line_width: 1.5`, `fill_opacity: 0.35` |
+| `graph.color` | `auto`: Farbe nach Sensortyp (Temperatur rot, Feuchtigkeit grün, Leistung/Energie orange, CO₂ lila, Druck/Wind türkis, Niederschlag blau, sonst Theme-Farbe) |
+| `icon_area` | ohne Hintergrund, 18 px, Symbolfarbe `--secondary-text-color` |
+| `tap_action` / `hold_action` | `more-info` / `none` |
+| `layout` | Höhe 64 px wie der Button, `padding: 8px 10px`, keine Mindestbreite |
+
+Die Schriftgrößen von Name und Wert wachsen mit der Kartenbreite (maximal 24 px für den Wert). Dadurch passen auch auf dem Handy 4 Karten nebeneinander. Mit `value_1.font_size` und `name_style.font_size` lassen sich feste Größen setzen. In Sections-Dashboards belegt die Info-Karte standardmäßig 3 von 12 Spalten, also 4 pro Zeile. Ein Beispiel mit 4 Karten in einem `horizontal-stack` steht in [`examples/info-cards.yaml`](examples/info-cards.yaml).
+
+Mit `variant: info` lässt sich die Info-Darstellung auch für `custom:smart-graph-button-card` einschalten. Im Editor heißt das „Darstellung → Info-Karte“.
 
 ## Minimale Konfiguration
 
@@ -288,6 +329,7 @@ value_2:
 | `hours_to_show` | `24` | Zeitraum in Stunden (> 0, ≤ 8760) |
 | `max_points` | `60` | Anzahl Zeitfenster bzw. Balken (2–1000) |
 | `aggregation` | `average` | `average` (zeitgewichtet), `min`, `max`, `last`, `sum` |
+| `baseline` | `zero` | Bezugslinie für Flächen/Balken: `zero` (Nulllinie) oder `bottom` (unterer Rand, Skala an die Daten angepasst, z. B. 20–28 °C) |
 | `fill` | `hold` | `hold`: Wert gilt bis zur nächsten Änderung; `gap`: leere Zeitfenster bleiben leer |
 | `min` / `max` | `auto` | Zahl oder `auto` |
 | `line_width` | `2` | 0–20 |
@@ -301,7 +343,7 @@ value_2:
 | `fade_start` | `fade` | Weicher Übergang am Beginn (links, ältere Werte): Zahl = % der Graphbreite (0–50), oder `"15%"` / `"40px"` |
 | `fade_end` | `fade` | Weicher Übergang am Ende (rechts, aktuelle Werte), gleiche Angaben wie `fade_start` |
 | `color_mode` | `state` | siehe [Farbmodi](#farbmodi) |
-| `color` | `var(--sgbc-graph-color)` | Farbe für `fixed` und Rückfallfarbe |
+| `color` | `var(--sgbc-graph-color)` | Farbe für `fixed` und Rückfallfarbe. `auto` wählt die Farbe nach Sensortyp |
 | `colors` | HA-Variablen | Map je Zustand für `state` |
 | `thresholds` | `[]` | `[{value, color}, …]` für `thresholds`, beliebig viele Einträge |
 | `threshold_mode` | `current` | `current` oder `per-point` |
@@ -501,6 +543,7 @@ Vollständige Beispiele liegen in [`examples/`](examples/):
 - [`full-background-graph.yaml`](examples/full-background-graph.yaml): Flächengraph über die ganze Karte, Overlay, Graphfarbe nach Zustand
 - [`state-background.yaml`](examples/state-background.yaml): Statushintergrund und halbtransparenter Graph
 - [`threshold-colors.yaml`](examples/threshold-colors.yaml): 0 bis < 10 W grün, 10 bis < 100 W orange, ab 100 W rot; angewendet auf Symbol, Graph und Hintergrund
+- [`info-cards.yaml`](examples/info-cards.yaml): 4 Info-Karten nebeneinander (Temperatur, Feuchtigkeit, CO₂, Luftdruck)
 - [`grid-power.yaml`](examples/grid-power.yaml): Netzbezug/Einspeisung als abgerundete Fläche, lila über und grün unter null
 
 ## Visueller Editor

@@ -220,6 +220,35 @@ ha-card.sgbc.auto-height { height: auto; min-height: 48px; }
 
 .state-unavailable .info, .state-unavailable .glyph { opacity: 0.6; }
 
+/* ---- info variant: [icon name] on top, large value + small unit below */
+.value .unit { flex: none; font-size: 0.5em; margin-left: 3px; color: var(--secondary-text-color); font-weight: 400; }
+.value .unit.hidden { display: none; }
+/* font sizes follow the card width, so 4 cards side by side still fit */
+ha-card.sgbc.variant-info { container-type: inline-size; }
+.info-layout .name { font-size: var(--sgbc-name-size, clamp(11px, 11cqi, 13px)); }
+.content.info-layout {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 0;
+}
+.info-layout .info { justify-content: flex-start; gap: 1px; }
+.info-layout .value-1 .unit { margin-left: 0; }
+.info-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.info-head .name { flex: 1; }
+.info-layout .icon-area { overflow: visible; }
+.info-layout .badge { width: 9px; height: 9px; right: -3px; bottom: -1px; --mdc-icon-size: 9px; box-shadow: none; }
+.info-layout .values { align-items: baseline; overflow: hidden; }
+.info-layout .value-1 {
+  align-items: baseline;
+  font-size: var(--sgbc-value-1-size, clamp(13px, 19cqi, 24px));
+  font-weight: var(--sgbc-value-1-weight, 400);
+  line-height: 1.15;
+  color: var(--sgbc-value-1-color, var(--sgbc-value-color, var(--primary-text-color)));
+}
+.info-layout .value-2 { font-size: var(--sgbc-value-2-size, var(--sgbc-values-size, 12px)); }
+
 .effects { z-index: 5; transition: background-color 120ms ease, box-shadow 120ms ease; }
 @media (hover: hover) {
   ha-card.sgbc:not(.no-action):hover .effects { background: color-mix(in srgb, var(--primary-text-color) 5%, transparent); }

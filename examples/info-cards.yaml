@@ -1,0 +1,28 @@
+# Example 6 – four info cards side by side (pure display, no switching).
+# Same height as the button card. Graph color "auto" picks a color by
+# device class: temperature red, humidity green, CO2 purple, …
+type: horizontal-stack
+cards:
+  - type: custom:smart-graph-info-card
+    entity: sensor.wohnzimmer_temperatur
+    name: Temperatur
+    icon: mdi:thermometer
+  - type: custom:smart-graph-info-card
+    entity: sensor.wohnzimmer_luftfeuchtigkeit
+    name: Luftfeuchtigkeit
+    icon: mdi:water-percent
+  - type: custom:smart-graph-info-card
+    entity: sensor.wohnzimmer_co2
+    name: CO₂
+    icon: mdi:molecule-co2
+  - type: custom:smart-graph-info-card
+    entity: sensor.wohnzimmer_luftdruck
+    name: Luftdruck
+    icon: mdi:gauge
+    value_1:
+      type: state
+      decimals: 0
+    graph:
+      hours_to_show: 48
+      color: "#06b6d4"
+      fade_start: 20
