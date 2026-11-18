@@ -273,6 +273,72 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 }
 .info-layout .value-2 { font-size: var(--sgbc-value-2-size, var(--sgbc-values-size, 12px)); }
 
+/* ---- info designs: tile (modern mini tile), ring (status ring), compact (status tile) */
+.content.idesign {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding: var(--sgbc-padding, 12px 14px);
+}
+.idesign .info.hidden { display: none; }
+.idesign .i-titles { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.idesign .name { font-size: var(--sgbc-name-size, clamp(12px, 9cqi, 14px)); line-height: 1.2; }
+.idesign .values { overflow: hidden; align-items: baseline; }
+.idesign .value-1 {
+  align-items: baseline;
+  font-weight: var(--sgbc-value-1-weight, 700);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: var(--sgbc-value-1-color, var(--sgbc-value-color, var(--primary-text-color)));
+}
+.idesign .value-1 .unit { font-size: 0.55em; font-weight: 500; margin-left: 4px; }
+.idesign .icon-area { overflow: visible; }
+.idesign .badge { width: 10px; height: 10px; right: -2px; bottom: -1px; --mdc-icon-size: 10px; box-shadow: none; }
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+.status.hidden { display: none; }
+.status .status-label { overflow: hidden; text-overflow: ellipsis; }
+.status-dot-mark { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--sgbc-level-color, var(--sgbc-accent)); }
+.status-dot-mark.hidden, .status-icon.hidden { display: none; }
+.status-icon { flex: none; display: inline-flex; --mdc-icon-size: 12px; width: 12px; height: 12px; color: var(--sgbc-level-color, var(--sgbc-accent)); }
+
+/* tile: [icon | name + status] on top, large value below, graph at the bottom */
+.idesign-tile .i-top { display: flex; align-items: center; gap: clamp(8px, 4cqi, 12px); min-width: 0; }
+.idesign-tile .values { margin-top: clamp(4px, 3cqi, 10px); padding-left: 2px; }
+.idesign-tile .value-1 { font-size: var(--sgbc-value-1-size, clamp(20px, 13cqi, 34px)); }
+
+/* ring: icon inside a ring that fills with the value */
+.idesign-ring .i-row { display: flex; align-items: center; gap: clamp(8px, 5cqi, 14px); min-width: 0; }
+.idesign-ring .icon-wrap { padding: 5px; }
+.idesign-ring .ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.idesign-ring .ring circle { fill: none; stroke-width: 7; }
+.idesign-ring .ring-track { stroke: color-mix(in srgb, var(--sgbc-accent) 18%, transparent); }
+.idesign-ring .ring-arc { stroke: var(--sgbc-accent); stroke-linecap: round; transition: stroke-dasharray 400ms ease; }
+.idesign-ring .i-titles { gap: 1px; }
+.idesign-ring .name { font-size: var(--sgbc-name-size, clamp(11px, 7.5cqi, 13px)); }
+.idesign-ring .value-1 { font-size: var(--sgbc-value-1-size, clamp(17px, 10cqi, 24px)); }
+.idesign-ring .status { display: none; }
+
+/* compact: everything centered, background follows the status color */
+.content.idesign-compact { align-items: center; text-align: center; gap: 3px; }
+.idesign-compact .name { font-size: var(--sgbc-name-size, 12px); text-align: center; max-width: 100%; }
+.idesign-compact .icon-area.shape-rounded-square { border-radius: 8px; }
+.idesign-compact .values { justify-content: center; max-width: 100%; margin-top: 2px; }
+.idesign-compact .value-1 { font-size: var(--sgbc-value-1-size, clamp(14px, 15cqi, 20px)); }
+.idesign-compact .value-1 .unit { margin-left: 2px; }
+.idesign-compact .status { font-size: 11px; justify-content: center; max-width: 100%; }
+ha-card.sgbc.design-compact.variant-info { border-color: color-mix(in srgb, var(--sgbc-accent) 22%, var(--divider-color, transparent)); }
+
 /* ---- large value on the right (hero) */
 ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge, ha-card.sgbc.design-sparkline { container-type: inline-size; }
 .content.has-hero { grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -395,6 +461,7 @@ ha-card.sgbc.design-double.design-sparkline .divider { top: 16px; bottom: 16px; 
 /* readable text over a graph: soft halo in the card background color */
 ha-card.sgbc.text-halo .name,
 ha-card.sgbc.text-halo .values,
+ha-card.sgbc.text-halo .status,
 ha-card.sgbc.text-halo .hero-text .hero-value,
 ha-card.sgbc.text-halo .hero-text .hero-caption {
   text-shadow: 0 0 2px var(--sgbc-halo-color, transparent), 0 0 6px var(--sgbc-halo-color, transparent);

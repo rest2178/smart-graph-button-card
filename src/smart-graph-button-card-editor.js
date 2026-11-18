@@ -23,8 +23,15 @@ const DESIGNS = [
   ["badge", "Farbiger Status mit Verbrauchsbereich"],
   ["sparkline", "Minimalistisch mit Sparkline"],
 ];
+const INFO_DESIGNS = [
+  ["standard", "Standard"],
+  ["tile", "Moderne Kachel (Wert, Status, Graph)"],
+  ["ring", "Kachel mit Zustandsring"],
+  ["compact", "Kompakte Statuskachel (Farbe nach Messwert)"],
+];
 const HERO_DESIGNS = ["subtle", "split", "badge"];
-const TINT_DESIGNS = ["subtle", "badge"];
+const TINT_DESIGNS = ["subtle", "badge", "tile", "ring", "compact"];
+const NAMELESS_DESIGNS = ["compact"];
 
 const VALUE_POSITIONS = [
   ["top-left", "Oben links (unter dem Namen)"],
@@ -107,6 +114,7 @@ const LABELS = {
   variant: "Darstellung",
   design: "Design",
   design_double: "Doppelte Höhe (2 × Button-Höhe)",
+  levels_enabled: "Zustand anzeigen (z. B. „Optimal“, „Zu warm“)",
   hero_enabled: "Großen Wert rechts anzeigen",
   hero_caption: "Beschriftung unter dem großen Wert",
   name: "Name",
@@ -163,7 +171,10 @@ function mainSchema(cfg) {
     },
     { name: "show_name", selector: { boolean: {} } },
     ...(isInfoConfig(cfg)
-      ? []
+      ? [
+          { name: "design", selector: { select: { mode: "dropdown", options: options(INFO_DESIGNS) } } },
+          ...(designOf(cfg) !== "standard" ? [{ name: "levels_enabled", selector: { boolean: {} } }] : []),
+        ]
       : [
           { name: "design", selector: { select: { mode: "dropdown", options: options(DESIGNS) } } },
           ...(isDesign(cfg) ? [{ name: "design_double", selector: { boolean: {} } }] : []),
@@ -300,8 +311,9 @@ const clone = (v) => JSON.parse(JSON.stringify(v ?? {}));
 
 /** Info cards have the graph enabled by default and other graph defaults. */
 const isInfoConfig = (c) => c?.variant === "info" || c?.type === "custom:smart-graph-info-card";
-const designOf = (c) => (isInfoConfig(c) ? "standard" : c?.design || "standard");
-const isDesign = (c) => designOf(c) !== "standard";
+const designOf = (c) => c?.design || "standard";
+/** Button designs (subtle, split, badge, sparkline) – info designs are handled separately. */
+const isDesign = (c) => !isInfoConfig(c) && designOf(c) !== "standard";
 const defaultColorMode = (c) => (isInfoConfig(c) || isDesign(c) ? "fixed" : "state");
 const heroOn = (c) => (c?.hero === undefined ? HERO_DESIGNS.includes(designOf(c)) : c.hero !== false && c.hero !== null);
 
@@ -329,6 +341,7 @@ export function configToForm(config) {
     icon: typeof c.icon === "string" ? c.icon : undefined,
     design: designOf(c),
     design_double: c.design_size === "double",
+    levels_enabled: c.levels !== false,
     hero_enabled: heroOn(c),
     hero_caption: c.hero && typeof c.hero === "object" && c.hero.caption !== undefined ? String(c.hero.caption ?? "") : undefined,
     value_1_enabled: c.value_1 === undefined ? isDesign(c) : Boolean(c.value_1),
@@ -348,7 +361,7 @@ export function configToForm(config) {
     graph_color_mode: get(c, "graph.color_mode") || defaultColorMode(c),
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
     graph_threshold_blend: get(c, "graph.threshold_blend") || "hard",
-    show_name: c.show_name !== false,
+    show_name: isInfoConfig(c) && NAMELESS_DESIGNS.includes(designOf(c)) ? c.show_name === true : c.show_name !== false,
     value_position: c.value_position || "top-left",
     value_offset_x: pxNumber(get(c, "value_offset.x")),
     value_offset_y: pxNumber(get(c, "value_offset.y")),
@@ -380,9 +393,33 @@ export function formToConfig(config, form) {
   else if (d.icon_position === "name-left") delete out.icon_position;
   if (d.value_position && d.value_position !== "top-left") out.value_position = d.value_position;
   else if (d.value_position === "top-left") delete out.value_position;
+  const namelessDefault = isInfoConfig(out) && NAMELESS_DESIGNS.includes(designOf(out));
   if (d.show_name === false) out.show_name = false;
+  else if (d.show_name === true && namelessDefault) out.show_name = true;
   else delete out.show_name;
-  if (d.variant && out.type !== "custom:smart-graph-info-card") setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
+  if (isInfoConfig(out) && designOf(out) !== "standard" && d.levels_enabled !== undefined) {
+    if (d.levels_enabled === false) out.levels = false;
+    else if (out.levels === false) delete out.levels;
+  }
+  if (d.variant && out.type !== "custom:smart-graph-info-card") {
+    const before = isInfoConfig(config) ? "info" : "button";
+    setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
+    if (d.variant !== before) {
+      // designs differ between button and info card
+      for (const key of ["design", "design_size", "hero", "levels", "accent_color"]) delete out[key];
+      return out;
+    }
+  }
+  if (d.design !== undefined && isInfoConfig(out) && d.design !== designOf(config)) {
+    setPath(out, "design", d.design === "standard" ? undefined : d.design);
+    for (const path of ["graph.type", "graph.position", "graph.color_mode", "graph.color", "graph.height", "state_background.enabled", "layout.height", "icon_area.shape"]) {
+      setPath(out, path, undefined);
+      pruneEmpty(out, path);
+    }
+    for (const key of ["show_name", "levels", "accent_color"]) delete out[key];
+    if (out.graph && Object.keys(out.graph).length === 0) delete out.graph;
+    return out;
+  }
   if (d.design !== undefined && !isInfoConfig(out) && d.design !== designOf(config)) {
     // a new design brings its own look: drop the settings it provides, keep entities and texts
     setPath(out, "design", d.design === "standard" ? undefined : d.design);

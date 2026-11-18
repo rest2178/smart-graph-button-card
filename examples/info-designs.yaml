@@ -1,0 +1,61 @@
+# Example 8 – info card designs: modern tile, status ring and compact
+# status tile. Status texts and colors come from presets per sensor type
+# (temperature, humidity, CO2, PM2.5 …).
+type: vertical-stack
+cards:
+  # Variant 1 – modern mini tiles
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_temperatur
+        design: tile
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_luftfeuchtigkeit
+        design: tile
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_co2
+        design: tile
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_pm25
+        name: Feinstaub (PM2.5)
+        design: tile
+  # Variant 3 – tiles with a status ring
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_temperatur
+        design: ring
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_luftfeuchtigkeit
+        design: ring
+  # Variant 4 – compact status tiles, color follows the value
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_temperatur
+        design: compact
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_luftfeuchtigkeit
+        design: compact
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_co2
+        design: compact
+      - type: custom:smart-graph-info-card
+        entity: sensor.wohnzimmer_pm25
+        design: compact
+        # own levels instead of the preset
+        levels:
+          - label: Sehr gut
+            color: "#22c55e"
+          - value: 15
+            label: Erhöht
+            color: "#f59e0b"
+          - value: 25
+            label: Schlecht
+            color: "#ef4444"

@@ -13,14 +13,15 @@ Eine kompakte, frei parametrierbare **Button-Karte für Home Assistant** mit Sym
 └──────────────────────────────────────────┘
 ```
 
-## Zwei Kartentypen
+## Drei Kartentypen
 
 | Typ | Zweck |
 | --- | --- |
 | `custom:smart-graph-button-card` | Schaltbare Button-Karte: Symbol, Name, zwei Werte, Graph, Aktionen |
-| `custom:smart-graph-info-card` | Reine Info-Karte für Messwerte (Temperatur, Luftfeuchtigkeit …): kleines Symbol und Name oben, großer Wert, Verlauf unten. Gleiche Höhe wie der Button, bis zu 4 nebeneinander |
+| `custom:smart-graph-info-card` | Reine Info-Karte für Messwerte (Temperatur, Luftfeuchtigkeit …): kleines Symbol und Name oben, großer Wert, Verlauf unten. Gleiche Höhe wie der Button, bis zu 4 nebeneinander. Mit `design: tile | ring | compact` als moderne Kachel mit Zustandstext |
+| `custom:smart-graph-overview-card` | Mehrere Sensoren in einer Karte (z. B. Luftqualität): Gesamtbewertung, alle Werte, umschaltbarer Verlauf |
 
-Beide stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
+Alle drei stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
 
 ## Inhalt
 
@@ -65,6 +66,8 @@ Beide stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
 - Graph mit `line`, `area`, `smooth-area`, `bar`, `column`, `stepped`, `line-bar`, `smooth-line-bar` in nativem SVG
 - Graphpositionen `full`, `after-icon`, `left`, `right`, `bottom`, `icon-area`, `custom`
 - Farbmodi `fixed`, `state`, `thresholds` (beliebig viele Grenzwerte, `current` oder `per-point`), `gradient`, `sign` (über/unter null)
+- Info-Karte als moderne Kachel, mit Zustandsring oder als kompakte Statuskachel; Zustandstexte wie „Optimal“ oder „Zu warm“ mit Vorgaben je Sensortyp
+- Übersichtskarte für mehrere Sensoren mit Gesamtbewertung und umschaltbarem Verlauf
 - Vier fertige Designs (`design: subtle | split | badge | sparkline`) mit großem Wert rechts, Statuspunkt und Akzentfarbe
 - Statusabhängiger Kartenhintergrund, Lesbarkeits-Overlay, Ebenenreihenfolge einstellbar
 - Automatisch lesbare Schriftfarben im Hell- und Dunkelmodus (Kontrastprüfung, Farbton bleibt erhalten)
@@ -225,6 +228,90 @@ accent_color:
 ```
 
 Der Statuspunkt vor dem ersten Wert wird mit `values.status_dot: true` eingeschaltet; bei den Designs ist er an. Mit `graph.headroom` (Anteil, Standard `0.05`, bei den Designs `0.15` bis `0.45`) bleibt über dem höchsten Wert Luft, damit der Graph nicht bis an den Text reicht.
+
+## Info-Karte: Designs
+
+Für die Info-Karte gibt es drei Designs (doppelte Button-Höhe, 128 px). Symbol, Farbe und Zustandstext ergeben sich aus dem Sensortyp (`device_class`), es reicht also die Entity:
+
+```yaml
+type: custom:smart-graph-info-card
+entity: sensor.wohnzimmer_temperatur
+design: tile        # standard | tile | ring | compact
+```
+
+| `design` | Aussehen |
+|---|---|
+| `tile` | **Moderne Mini-Kachel:** Symbol im farbigen Kreis, Name, Zustand („● Eher kühl“), großer Wert, Verlauf unten; Kachel in der Farbe des Sensortyps leicht eingefärbt |
+| `ring` | **Kachel mit Zustandsring:** Symbol in einem Ring, der sich mit dem Wert füllt, daneben Name und Wert, Verlauf unten |
+| `compact` | **Kompakte Statuskachel:** alles zentriert – Symbol, Wert, Zustand („● Optimal“), kleiner Verlauf. Hintergrund, Symbol und Graph wechseln die Farbe mit dem Zustand (blau/grün/orange/rot). Ohne Namen (`show_name: true` blendet ihn ein) |
+
+**Farben je Sensortyp:** Temperatur orange, Luftfeuchtigkeit blau, CO₂ grün, Feinstaub violett, VOC türkis … Eigene Farbe: `accent_color: "#0ea5e9"`. `accent_color: level` färbt nach dem Zustand (Standard bei `compact`).
+
+**Zustände (`levels`)** – Vorgaben (jeweils „ab Wert“):
+
+| Sensortyp | Stufen |
+|---|---|
+| Temperatur | Zu kalt · ab 15 Eher kühl · ab 19 Optimal · ab 24 Eher warm · ab 26 Zu warm |
+| Luftfeuchtigkeit | Zu trocken · ab 30 Eher trocken · ab 40 Optimal · ab 60 Eher feucht · ab 70 Zu feucht |
+| CO₂ | Gut · ab 800 Erhöht · ab 1400 Kritisch |
+| Feinstaub PM2.5 | Sehr gut · ab 5 Gut · ab 15 Erhöht · ab 25 Schlecht · ab 50 Sehr schlecht |
+| Feinstaub PM10 | Sehr gut · ab 15 Gut · ab 45 Erhöht · ab 75 Schlecht |
+| VOC | Gut · ab 300 Erhöht · ab 1000 Schlecht |
+
+Eigene Stufen (die erste ohne `value` gilt für alles darunter, `icon` ersetzt den Punkt):
+
+```yaml
+levels:
+  - label: Zu kalt
+    color: "#3b82f6"
+    icon: mdi:snowflake
+  - value: 19
+    label: Optimal
+    color: "#22c55e"
+  - value: 25
+    label: Zu warm
+    color: "#ef4444"
+# levels: false        # keinen Zustand anzeigen
+# levels: humidity     # Vorgabe eines anderen Sensortyps verwenden
+```
+
+**Ring:** Der Bereich des Rings kommt aus dem Sensortyp (Temperatur 0–40, Luftfeuchtigkeit 0–100, CO₂ 400–2000, PM2.5 0–75). Eigener Bereich: `ring: { min: 10, max: 30 }`.
+
+Im Editor: „Design“ und „Zustand anzeigen“. Höhe, Graph, Farben und Schriftgrößen lassen sich wie gewohnt überschreiben.
+
+## Übersichtskarte (mehrere Sensoren)
+
+```yaml
+type: custom:smart-graph-overview-card
+title: Luftqualität
+entities:
+  - sensor.wohnzimmer_temperatur
+  - sensor.wohnzimmer_luftfeuchtigkeit
+  - entity: sensor.wohnzimmer_co2
+    name: CO₂               # optional: name, icon, color, unit, decimals, levels
+  - sensor.wohnzimmer_pm25
+graph_entity: sensor.wohnzimmer_co2   # zu Beginn gezeigter Verlauf (Standard: erster Sensor)
+hours_to_show: 24
+```
+
+- **Links:** Gesamtbewertung nach dem schlechtesten Sensor – „Gut / Angenehme Raumluft“, „Mäßig / Lüften empfohlen“ oder „Schlecht / Bitte lüften“. Leichte Abweichungen wie „Eher kühl“ zählen als gut.
+- **Rechts:** alle Werte mit Symbol in der Farbe des Sensortyps. Antippen öffnet die Detailansicht.
+- **Unten:** Verlauf mit Zeitachse; mit den Schaltflächen wird zwischen den Sensoren gewechselt.
+- Auf schmalen Bildschirmen rutschen die Werte unter die Bewertung.
+
+| Option | Standard | Beschreibung |
+|---|---|---|
+| `title` | `Luftqualität` | Überschrift der Bewertung |
+| `entities` | – | Sensoren (ID oder Objekt mit `entity`, `name`, `icon`, `color`, `unit`, `decimals`, `levels`) |
+| `graph_entity` | erster Sensor | Verlauf beim Laden |
+| `hours_to_show` | `24` | Zeitraum des Verlaufs |
+| `update_interval` | `300` | Sekunden zwischen History-Abfragen |
+| `graph_height` | `86px` | Höhe des Verlaufs |
+| `show_rating` / `show_graph` / `show_axis` | `true` | Bereiche ein-/ausblenden |
+| `rating_icon` | `mdi:leaf` | Symbol der Bewertung |
+| `ratings` | siehe oben | Eigene Texte: Liste mit drei Einträgen `{label, text, color}` für gut, mäßig, schlecht |
+
+Der visuelle Editor bietet Titel, Sensoren, Start-Verlauf, Zeitraum und die Schalter für Bewertung und Verlauf.
 
 ## Minimale Konfiguration
 
@@ -663,6 +750,8 @@ Vollständige Beispiele liegen in [`examples/`](examples/):
 - [`threshold-colors.yaml`](examples/threshold-colors.yaml): 0 bis < 10 W grün, 10 bis < 100 W orange, ab 100 W rot; angewendet auf Symbol, Graph und Hintergrund
 - [`info-cards.yaml`](examples/info-cards.yaml): 4 Info-Karten nebeneinander (Temperatur, Feuchtigkeit, CO₂, Luftdruck)
 - [`designs.yaml`](examples/designs.yaml): die vier Designs für einen Schreibtisch mit Leistungsmesser
+- [`info-designs.yaml`](examples/info-designs.yaml): Info-Karten als moderne Kachel, mit Zustandsring und als kompakte Statuskachel
+- [`overview.yaml`](examples/overview.yaml): Luftqualität mit Gesamtbewertung und umschaltbarem Verlauf
 - [`grid-power.yaml`](examples/grid-power.yaml): Netzbezug/Einspeisung als abgerundete Fläche, lila über und grün unter null
 
 ## Visueller Editor

@@ -15,11 +15,13 @@ import { renderGraphSVG } from "./graph-renderer.js";
 import { GestureRecognizer, bindActionHandler, handleAction, hasAction } from "./action-handler.js";
 import { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx, paddingSide } from "./utils.js";
 import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
+import { registerOverviewCard } from "./overview-card.js";
+import { resolveLevels, findLevel, ringFraction, TYPE_COLORS, TYPE_ICONS } from "./levels.js";
 import { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } from "./contrast.js";
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.8.0";
+export const CARD_VERSION = "1.9.0";
 
 let instanceCounter = 0;
 
@@ -383,7 +385,7 @@ export class SmartGraphButtonCard extends HTMLElement {
 
     const card = el("ha-card", `sgbc design-${c.design || "standard"}${c.design_size === "double" ? " design-double" : ""}`, { tabindex: "0", role: "button" });
     // a value counts as configured when the user or the chosen design sets it
-    const configured = (path) => userSet(raw, path) || (c.design && c.design !== "standard" && userSet(designDefaults(c.design, c.design_size), path));
+    const configured = (path) => userSet(raw, path) || (c.design && c.design !== "standard" && userSet(designDefaults(c.design, c.design_size, c.variant === "info"), path));
     const stateBg = el("div", "layer state-bg");
     // "after-icon" without an icon area is the same as "full"
     const graphPos = c.graph.position === "after-icon" && !c.icon_area.enabled ? "full" : c.graph.position;
@@ -446,7 +448,59 @@ export class SmartGraphButtonCard extends HTMLElement {
     sep.textContent = c.values.separator;
     const v2 = makeValue(2);
     values.append(v1.wrap, sep, v2.wrap);
-    if (isInfo) {
+    const infoDesign = isInfo && c.design && c.design !== "standard";
+    // status line ("● Optimal") of the info designs
+    const status = el("div", "status hidden");
+    const statusDot = el("span", "status-dot-mark");
+    const statusIcon = el("ha-icon", "status-icon hidden", { "aria-hidden": "true" });
+    const statusLabel = el("span", "status-label");
+    status.append(statusDot, statusIcon, statusLabel);
+    let ring = null;
+    if (infoDesign) {
+      card.classList.add("variant-info");
+      content.classList.add("idesign", `idesign-${c.design}`);
+      const titles = el("div", "i-titles");
+      if (c.design === "ring" && iconWrap) {
+        // status ring around the icon: track + arc (stroke-dasharray)
+        const ns = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(ns, "svg");
+        svg.setAttribute("viewBox", "0 0 100 100");
+        svg.setAttribute("class", "ring");
+        svg.setAttribute("aria-hidden", "true");
+        const track = document.createElementNS(ns, "circle");
+        const arc = document.createElementNS(ns, "circle");
+        for (const [node, cls] of [[track, "ring-track"], [arc, "ring-arc"]]) {
+          node.setAttribute("cx", "50");
+          node.setAttribute("cy", "50");
+          node.setAttribute("r", "45");
+          node.setAttribute("pathLength", "100");
+          node.setAttribute("class", cls);
+        }
+        arc.setAttribute("stroke-dasharray", "0 100");
+        svg.append(track, arc);
+        iconWrap.prepend(svg);
+        ring = { svg, arc };
+      }
+      if (c.design === "tile") {
+        const top = el("div", "i-top");
+        titles.append(name, status);
+        if (iconWrap) top.append(iconWrap);
+        top.append(titles);
+        content.append(top, values);
+      } else if (c.design === "ring") {
+        const row = el("div", "i-row");
+        titles.append(name, values, status);
+        if (iconWrap) row.append(iconWrap);
+        row.append(titles);
+        content.append(row);
+      } else {
+        // compact: centered column
+        if (iconWrap) content.append(iconWrap);
+        content.append(name, values, status);
+      }
+      content.append(info); // empty, keeps the element references valid
+      info.classList.add("hidden");
+    } else if (isInfo) {
       // info layout: [icon name] on top, large value below
       const head = el("div", "info-head");
       const iconInHead = Boolean(iconWrap) && (c.icon_position === "name-left" || c.icon_position === "name-right");
@@ -573,7 +627,8 @@ export class SmartGraphButtonCard extends HTMLElement {
     card.addEventListener("transitionend", (ev) => ev.target === card && recheck());
     const probe = el("span", "probe", { "aria-hidden": "true" });
     content.append(probe);
-    this._els = { card, stateBg, graph, divider, overlay, content, iconWrap, iconArea, iconGraph, glyph, badge, name, values, v1, v2, sep, hero, probe };
+    this._els = { card, stateBg, graph, divider, overlay, content, iconWrap, iconArea, iconGraph, glyph, badge, name, values, v1, v2, sep, hero, probe, status, statusDot, statusIcon, statusLabel, ring };
+    this._levelsFor = undefined;
     this._graphSize = { w: 0, h: 0 };
     this._lastSvg = null;
     this._glyphKey = null;
@@ -651,7 +706,39 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (customClass) card.classList.add(`custom-${customClass}`);
 
     // colors
-    setVar("--sgbc-accent", resolveColor(c.accent_color, group, customClass));
+    // status level (info designs) and accent color
+    const deviceClass = mainObj?.attributes?.device_class;
+    let level = null;
+    if (c.levels) {
+      if (this._levelsFor !== deviceClass) {
+        this._levels = resolveLevels(c.levels, deviceClass);
+        this._levelsFor = deviceClass;
+      }
+      level = group === "unavailable" ? null : findLevel(mainObj?.state, this._levels);
+    }
+    let accent = resolveColor(c.accent_color, group, customClass);
+    if (accent === "level") accent = level?.color || TYPE_COLORS[deviceClass] || "auto";
+    if (accent === "auto") accent = TYPE_COLORS[deviceClass] || AUTO_COLORS[deviceClass] || "var(--primary-color, #03a9f4)";
+    if (group === "unavailable" && c.variant === "info" && c.design !== "standard") accent = "var(--disabled-text-color, #6b7280)";
+    setVar("--sgbc-accent", accent);
+    if (els.status) {
+      els.status.classList.toggle("hidden", !level || !level.label);
+      if (level) {
+        if (els.statusLabel.textContent !== level.label) els.statusLabel.textContent = level.label;
+        setVar("--sgbc-level-color", level.color);
+        const ic = level.icon || "";
+        els.statusIcon.classList.toggle("hidden", !ic);
+        els.statusDot.classList.toggle("hidden", Boolean(ic));
+        if (ic && els.statusIcon.icon !== ic) {
+          els.statusIcon.icon = ic;
+          els.statusIcon.setAttribute("icon", ic);
+        }
+      }
+    }
+    if (els.ring) {
+      const f = group === "unavailable" ? 0 : ringFraction(mainObj?.state, deviceClass, c.ring ? [c.ring.min, c.ring.max] : null);
+      els.ring.arc.setAttribute("stroke-dasharray", `${Math.round(f * 1000) / 10} 100`);
+    }
     setVar("--sgbc-icon-color", override("icon") ?? resolveColor(c.icon_area.color, group, customClass));
     const ib = override("icon-background");
     setVar("--sgbc-icon-background", ib ? mix(ib, 18) : resolveColor(c.icon_area.background, group, customClass));
@@ -788,6 +875,7 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (picture && !this._failedPictures.has(picture)) mode = "picture";
     else if (iconCfg === "none") mode = "none";
     else if (iconCfg) mode = "icon";
+    else if (c.variant === "info" && c.design !== "standard" && TYPE_ICONS[mainObj?.attributes?.device_class] && !mainObj?.attributes?.icon) mode = "icon";
     else if (mainObj && customElements.get("ha-state-icon")) mode = "state-icon";
     else mode = "icon";
 
@@ -818,7 +906,8 @@ export class SmartGraphButtonCard extends HTMLElement {
       if (node.getAttribute("src") !== picture) node.setAttribute("src", picture);
     } else if (mode === "icon") {
       const domain = c.entity.split(".")[0];
-      const icon = iconCfg || mainObj?.attributes?.icon || DOMAIN_ICONS[domain] || "mdi:bookmark";
+      const typeIcon = c.variant === "info" && c.design !== "standard" ? TYPE_ICONS[mainObj?.attributes?.device_class] : null;
+      const icon = iconCfg || mainObj?.attributes?.icon || typeIcon || DOMAIN_ICONS[domain] || "mdi:bookmark";
       if (node.icon !== icon) {
         node.icon = icon;
         node.setAttribute("icon", icon);
@@ -1014,6 +1103,7 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (!c || !els || typeof getComputedStyle === "undefined") return;
     const targets = [els.name, els.v1.wrap, els.v1.unit, els.sep, els.v2.wrap, els.v2.unit];
     if (els.hero) targets.push(els.hero.value, els.hero.caption);
+    if (els.statusLabel) targets.push(els.statusLabel);
     if (c.text_contrast === "off") {
       for (const t of targets) t.style.removeProperty("color");
       els.card.classList.remove("text-halo");
@@ -1157,6 +1247,7 @@ if (!customElements.get(CARD_TAG)) {
     preview: true,
     documentationURL: "https://github.com/rest2178/smart-graph-button-card",
   });
+  registerOverviewCard();
   // eslint-disable-next-line no-console
   console.info(`%c SMART-GRAPH-BUTTON-CARD %c v${CARD_VERSION} `, "color:#fff;background:#0ea5e9;font-weight:700;border-radius:3px 0 0 3px", "color:#0ea5e9;background:#e0f2fe;border-radius:0 3px 3px 0");
 }

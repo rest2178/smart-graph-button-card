@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { validateConfig, ConfigError, DEFAULTS } from "../src/config-validator.js";
+import { validateOverviewConfig } from "../src/overview-card.js";
 
 const base = { type: "custom:smart-graph-button-card", entity: "switch.schreibtisch_1" };
 const throwsWith = (cfg, re) => assert.throws(() => validateConfig(cfg), (e) => e instanceof ConfigError && re.test(e.message));
@@ -61,8 +62,12 @@ test("all spec examples validate", async () => {
     const docs = readFileSync(new URL(file, dir), "utf8").split(/^---$/m).filter((d) => d.trim());
     for (const doc of docs) {
       const cfg = parseSimpleYaml(doc);
-      const cards = Array.isArray(cfg.cards) ? cfg.cards : [cfg];
-      for (const card of cards) {
+      const flatten = (c) => (Array.isArray(c.cards) ? c.cards.flatMap(flatten) : [c]);
+      for (const card of flatten(cfg)) {
+        if (card.type === "custom:smart-graph-overview-card") {
+          assert.doesNotThrow(() => validateOverviewConfig(card), `${file}`);
+          continue;
+        }
         const withVariant = card.type === "custom:smart-graph-info-card" ? { ...card, variant: "info" } : card;
         assert.doesNotThrow(() => validateConfig(withVariant), `${file}`);
       }
@@ -204,4 +209,24 @@ test("designs: normal height by default, double on request", () => {
   assert.equal(double.name_style.font_size, "16px");
   assert.equal(validateConfig({ ...base, design_size: "double", layout: { height: "110px" } }).layout.height, "110px");
   assert.throws(() => validateConfig({ ...base, design_size: "huge" }));
+});
+
+test("info designs: tile, ring, compact defaults", () => {
+  const base = { type: "x", variant: "info", entity: "sensor.t" };
+  const tile = validateConfig({ ...base, design: "tile" });
+  assert.equal(tile.design, "tile");
+  assert.equal(tile.levels, "auto");
+  assert.equal(tile.accent_color, "auto");
+  assert.equal(tile.layout.height, "128px");
+  assert.equal(tile.graph.enabled, true);
+  assert.equal(tile.hero, undefined);
+  const compact = validateConfig({ ...base, design: "compact" });
+  assert.equal(compact.accent_color, "level");
+  assert.equal(compact.show_name, false);
+  assert.equal(validateConfig({ ...base, design: "ring", ring: { min: 10, max: 30 } }).ring.max, 30);
+  assert.throws(() => validateConfig({ ...base, design: "subtle" }));
+  assert.throws(() => validateConfig({ type: "x", entity: "switch.a", design: "tile" }));
+  assert.throws(() => validateConfig({ ...base, design: "tile", ring: { min: 5, max: 1 } }));
+  assert.throws(() => validateConfig({ ...base, design: "tile", levels: [{ value: "x", color: "red" }] }));
+  assert.equal(validateConfig(base).levels, false);
 });

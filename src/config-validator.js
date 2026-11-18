@@ -13,6 +13,7 @@ import { AGGREGATIONS, FILL_MODES } from "./data-reducer.js";
 import { ACTIONS, DEFAULT_HOLD_TIME, DEFAULT_DOUBLE_TAP_WINDOW, isToggleableDomain } from "./action-handler.js";
 import { VALUE_TYPES, VALUE_FORMATS } from "./value-formatter.js";
 import { MIN_UPDATE_INTERVAL } from "./history-provider.js";
+import { LEVEL_PRESETS } from "./levels.js";
 
 export const GRAPH_POSITIONS = ["full", "after-icon", "left", "right", "bottom", "icon-area", "custom"];
 export const COLOR_MODES = ["fixed", "state", "thresholds", "gradient", "sign"];
@@ -274,6 +275,55 @@ export const DESIGN_DEFAULTS = Object.freeze({
   }),
 });
 export const DESIGN_SIZES = ["normal", "double"];
+export const INFO_DESIGNS = ["standard", "tile", "ring", "compact"];
+
+const ACCENT_ALL = (pct) => {
+  const v = `color-mix(in srgb, var(--sgbc-accent) ${pct}%, transparent)`;
+  return { on: v, off: v, unavailable: v, other: v };
+};
+const INFO_DESIGN_BASE = {
+  levels: "auto",
+  accent_color: "auto",
+  icon_area: {
+    shape: "circle",
+    size: "40px",
+    icon_size: "22px",
+    color: { on: "var(--sgbc-accent)", off: "var(--sgbc-accent)", other: "var(--sgbc-accent)", unavailable: "var(--disabled-text-color, #6b7280)" },
+    background: ACCENT_ALL(16),
+  },
+  name_style: { font_size: "14px", font_weight: 600 },
+  layout: { height: "128px", padding: "12px 14px", border_radius: "16px" },
+  state_background: { enabled: true, colors: ACCENT_ALL(7) },
+  graph: {
+    type: "smooth-area",
+    position: "bottom",
+    height: "40%",
+    baseline: "bottom",
+    color_mode: "fixed",
+    color: "var(--sgbc-accent)",
+    line_width: 1.5,
+    fill_opacity: 0.3,
+    opacity: 1,
+    max_points: 48,
+    headroom: 0.35,
+  },
+};
+/** Info card designs (pictures: modern tile, status ring, compact status tile). */
+export const INFO_DESIGN_DEFAULTS = Object.freeze({
+  tile: INFO_DESIGN_BASE,
+  ring: mergeDeep(INFO_DESIGN_BASE, {
+    icon_area: { size: "50px", icon_size: "24px", background: ACCENT_ALL(10) },
+    graph: { height: "34%" },
+  }),
+  compact: mergeDeep(INFO_DESIGN_BASE, {
+    accent_color: "level",
+    show_name: false,
+    icon_area: { shape: "rounded-square", size: "28px", icon_size: "18px" },
+    layout: { padding: "10px 8px", min_width: "0px" },
+    state_background: { colors: ACCENT_ALL(10) },
+    graph: { height: "30%", max_points: 36 },
+  }),
+});
 /** design_size: double – twice the button height, larger icon and text. */
 const DESIGN_DOUBLE = {
   icon_area: { size: "50px", icon_size: "28px" },
@@ -290,7 +340,8 @@ const DESIGN_DOUBLE_EXTRA = {
 };
 
 /** Defaults a design brings along (normal or double height). */
-export function designDefaults(design, size = "normal") {
+export function designDefaults(design, size = "normal", info = false) {
+  if (info) return INFO_DESIGN_DEFAULTS[design] || {};
   if (!DESIGN_DEFAULTS[design]) return {};
   if (size !== "double") return DESIGN_DEFAULTS[design];
   return mergeDeep(mergeDeep(DESIGN_DEFAULTS[design], DESIGN_DOUBLE), DESIGN_DOUBLE_EXTRA[design] || {});
@@ -320,12 +371,14 @@ export function validateConfig(raw) {
     throw new ConfigError(`variant „${raw.variant}“ ist ungültig. Erlaubt: button, info.`);
   }
   const isInfo = raw.variant === "info";
-  const design = isInfo || raw.design === undefined ? "standard" : raw.design;
-  if (!DESIGNS.includes(design)) throw new ConfigError(`design „${raw.design}“ ist ungültig. Erlaubt: ${DESIGNS.join(", ")}.`);
-  const isDesign = design !== "standard";
+  const design = raw.design === undefined ? "standard" : raw.design;
+  const allowedDesigns = isInfo ? INFO_DESIGNS : DESIGNS;
+  if (!allowedDesigns.includes(design)) throw new ConfigError(`design „${raw.design}“ ist ungültig. Erlaubt: ${allowedDesigns.join(", ")}.`);
+  const isInfoDesign = isInfo && design !== "standard";
+  const isDesign = !isInfo && design !== "standard";
   const designSize = raw.design_size === undefined ? "normal" : raw.design_size;
   if (!DESIGN_SIZES.includes(designSize)) throw new ConfigError(`design_size „${raw.design_size}“ ist ungültig. Erlaubt: ${DESIGN_SIZES.join(", ")}.`);
-  const base = isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : isDesign ? mergeDeep(DEFAULTS, designDefaults(design, designSize)) : DEFAULTS;
+  const base = isInfo ? mergeDeep(mergeDeep(DEFAULTS, INFO_DEFAULTS), isInfoDesign ? INFO_DESIGN_DEFAULTS[design] : {}) : isDesign ? mergeDeep(DEFAULTS, designDefaults(design, designSize)) : DEFAULTS;
   const c = mergeDeep(base, raw);
   c.variant = isInfo ? "info" : "button";
   c.design = design;
@@ -456,7 +509,23 @@ export function validateConfig(raw) {
 
   // ---- large value on the right ("9 W / aktuell")
   c.values.status_dot = Boolean(c.values.status_dot);
-  c.hero = normalizeHero(raw.hero, design, c, err);
+  c.hero = isInfo ? undefined : normalizeHero(raw.hero, design, c, err);
+  // ---- status levels ("Optimal", "Zu warm" …) and status ring
+  if (c.levels === undefined) c.levels = false;
+  if (Array.isArray(c.levels)) {
+    c.levels.forEach((l, i) => {
+      if (!isPlainObject(l)) return err(`levels[${i}] muss ein Objekt sein (value, label, color).`);
+      if (!isSafeCssValue(l.color)) err(`levels[${i}].color fehlt oder ist ungültig.`);
+      if (l.value !== undefined && l.value !== null && parseNumber(l.value) === null) err(`levels[${i}].value muss eine Zahl sein.`);
+    });
+  } else if (![true, false, "auto", ...Object.keys(LEVEL_PRESETS)].includes(c.levels)) {
+    err(`levels muss auto, false, eine Liste oder ein Sensortyp (${Object.keys(LEVEL_PRESETS).join(", ")}) sein.`);
+  }
+  if (c.ring !== undefined) {
+    if (!isPlainObject(c.ring) || parseNumber(c.ring.min) === null || parseNumber(c.ring.max) === null || parseNumber(c.ring.max) <= parseNumber(c.ring.min)) {
+      err("ring benötigt min und max (Zahlen, max > min).");
+    }
+  }
   if (!isPlainObject(c.accent_color) && !isSafeCssValue(c.accent_color)) err("accent_color ist keine gültige Farbe.");
 
   // ---- state background / layers

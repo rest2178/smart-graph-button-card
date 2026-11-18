@@ -1,0 +1,13 @@
+# Example 9 – one card for the room air (variant 2): overall rating, all
+# values side by side and a history graph that can be switched per sensor.
+type: custom:smart-graph-overview-card
+title: Luftqualität
+entities:
+  - sensor.wohnzimmer_temperatur
+  - sensor.wohnzimmer_luftfeuchtigkeit
+  - entity: sensor.wohnzimmer_co2
+    name: CO₂
+  - entity: sensor.wohnzimmer_pm25
+    name: Feinstaub
+graph_entity: sensor.wohnzimmer_co2
+hours_to_show: 24

@@ -173,3 +173,22 @@ test("design: double height toggle", () => {
   const std = formToConfig(out, { ...configToForm(out), design: "standard" });
   assert.equal(std.design_size, undefined);
 });
+
+test("info designs in the editor", () => {
+  const cfg = { type: "custom:smart-graph-info-card", entity: "sensor.t", graph: { type: "line", position: "full" } };
+  const out = formToConfig(cfg, { ...configToForm(cfg), design: "compact" });
+  assert.equal(out.design, "compact");
+  assert.equal(out.graph, undefined);
+  const form = configToForm(out);
+  assert.equal(form.show_name, false);
+  assert.equal(form.levels_enabled, true);
+  assert.equal(form.state_background_enabled, true);
+  const named = formToConfig(out, { ...form, show_name: true, levels_enabled: false });
+  assert.equal(named.show_name, true);
+  assert.equal(named.levels, false);
+  // button → info drops the button design
+  const btn = { type: "custom:smart-graph-button-card", entity: "switch.a", design: "subtle" };
+  const info = formToConfig(btn, { ...configToForm(btn), variant: "info" });
+  assert.equal(info.variant, "info");
+  assert.equal(info.design, undefined);
+});

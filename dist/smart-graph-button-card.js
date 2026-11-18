@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.8.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.9.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -277,6 +277,72 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 }
 .info-layout .value-2 { font-size: var(--sgbc-value-2-size, var(--sgbc-values-size, 12px)); }
 
+/* ---- info designs: tile (modern mini tile), ring (status ring), compact (status tile) */
+.content.idesign {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding: var(--sgbc-padding, 12px 14px);
+}
+.idesign .info.hidden { display: none; }
+.idesign .i-titles { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.idesign .name { font-size: var(--sgbc-name-size, clamp(12px, 9cqi, 14px)); line-height: 1.2; }
+.idesign .values { overflow: hidden; align-items: baseline; }
+.idesign .value-1 {
+  align-items: baseline;
+  font-weight: var(--sgbc-value-1-weight, 700);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: var(--sgbc-value-1-color, var(--sgbc-value-color, var(--primary-text-color)));
+}
+.idesign .value-1 .unit { font-size: 0.55em; font-weight: 500; margin-left: 4px; }
+.idesign .icon-area { overflow: visible; }
+.idesign .badge { width: 10px; height: 10px; right: -2px; bottom: -1px; --mdc-icon-size: 10px; box-shadow: none; }
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+.status.hidden { display: none; }
+.status .status-label { overflow: hidden; text-overflow: ellipsis; }
+.status-dot-mark { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--sgbc-level-color, var(--sgbc-accent)); }
+.status-dot-mark.hidden, .status-icon.hidden { display: none; }
+.status-icon { flex: none; display: inline-flex; --mdc-icon-size: 12px; width: 12px; height: 12px; color: var(--sgbc-level-color, var(--sgbc-accent)); }
+
+/* tile: [icon | name + status] on top, large value below, graph at the bottom */
+.idesign-tile .i-top { display: flex; align-items: center; gap: clamp(8px, 4cqi, 12px); min-width: 0; }
+.idesign-tile .values { margin-top: clamp(4px, 3cqi, 10px); padding-left: 2px; }
+.idesign-tile .value-1 { font-size: var(--sgbc-value-1-size, clamp(20px, 13cqi, 34px)); }
+
+/* ring: icon inside a ring that fills with the value */
+.idesign-ring .i-row { display: flex; align-items: center; gap: clamp(8px, 5cqi, 14px); min-width: 0; }
+.idesign-ring .icon-wrap { padding: 5px; }
+.idesign-ring .ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.idesign-ring .ring circle { fill: none; stroke-width: 7; }
+.idesign-ring .ring-track { stroke: color-mix(in srgb, var(--sgbc-accent) 18%, transparent); }
+.idesign-ring .ring-arc { stroke: var(--sgbc-accent); stroke-linecap: round; transition: stroke-dasharray 400ms ease; }
+.idesign-ring .i-titles { gap: 1px; }
+.idesign-ring .name { font-size: var(--sgbc-name-size, clamp(11px, 7.5cqi, 13px)); }
+.idesign-ring .value-1 { font-size: var(--sgbc-value-1-size, clamp(17px, 10cqi, 24px)); }
+.idesign-ring .status { display: none; }
+
+/* compact: everything centered, background follows the status color */
+.content.idesign-compact { align-items: center; text-align: center; gap: 3px; }
+.idesign-compact .name { font-size: var(--sgbc-name-size, 12px); text-align: center; max-width: 100%; }
+.idesign-compact .icon-area.shape-rounded-square { border-radius: 8px; }
+.idesign-compact .values { justify-content: center; max-width: 100%; margin-top: 2px; }
+.idesign-compact .value-1 { font-size: var(--sgbc-value-1-size, clamp(14px, 15cqi, 20px)); }
+.idesign-compact .value-1 .unit { margin-left: 2px; }
+.idesign-compact .status { font-size: 11px; justify-content: center; max-width: 100%; }
+ha-card.sgbc.design-compact.variant-info { border-color: color-mix(in srgb, var(--sgbc-accent) 22%, var(--divider-color, transparent)); }
+
 /* ---- large value on the right (hero) */
 ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge, ha-card.sgbc.design-sparkline { container-type: inline-size; }
 .content.has-hero { grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -399,6 +465,7 @@ ha-card.sgbc.design-double.design-sparkline .divider { top: 16px; bottom: 16px; 
 /* readable text over a graph: soft halo in the card background color */
 ha-card.sgbc.text-halo .name,
 ha-card.sgbc.text-halo .values,
+ha-card.sgbc.text-halo .status,
 ha-card.sgbc.text-halo .hero-text .hero-value,
 ha-card.sgbc.text-halo .hero-text .hero-caption {
   text-shadow: 0 0 2px var(--sgbc-halo-color, transparent), 0 0 6px var(--sgbc-halo-color, transparent);
@@ -2231,6 +2298,194 @@ function clearHistoryCache() {
 return { MIN_UPDATE_INTERVAL, buildCacheKey, computeWindow, parseHistoryResponse, fetchHistory, clearHistoryCache };
 })();
 
+// ---- src/levels.js
+const __m_levels_js = (() => {
+/**
+ * Status levels ("Optimal", "Zu warm", "Erhöht" …) with colors, presets per
+ * sensor type (device_class) and an overall rating for several sensors.
+ * Pure module – no DOM access.
+ */
+const { parseNumber, isPlainObject, isSafeCssValue } = __m_utils_js;
+
+const LEVEL_COLORS = Object.freeze({
+  blue: "#3b82f6",
+  green: "#22c55e",
+  amber: "#f59e0b",
+  red: "#ef4444",
+});
+
+/** Color per sensor type: icon, graph and tint of the info designs. */
+const TYPE_COLORS = Object.freeze({
+  temperature: "#f59e0b",
+  humidity: "#3b82f6",
+  moisture: "#3b82f6",
+  carbon_dioxide: "#22c55e",
+  carbon_monoxide: "#ef4444",
+  pm25: "#8b5cf6",
+  pm10: "#a855f7",
+  pm1: "#8b5cf6",
+  volatile_organic_compounds: "#14b8a6",
+  volatile_organic_compounds_parts: "#14b8a6",
+  nitrogen_dioxide: "#f97316",
+  ozone: "#06b6d4",
+  aqi: "#22c55e",
+  illuminance: "#eab308",
+  pressure: "#06b6d4",
+  atmospheric_pressure: "#06b6d4",
+  power: "#f59e0b",
+  energy: "#f59e0b",
+  battery: "#22c55e",
+});
+
+const TYPE_ICONS = Object.freeze({
+  temperature: "mdi:thermometer",
+  humidity: "mdi:water",
+  moisture: "mdi:water",
+  carbon_dioxide: "mdi:leaf",
+  carbon_monoxide: "mdi:molecule-co",
+  pm25: "mdi:blur",
+  pm10: "mdi:blur",
+  pm1: "mdi:blur",
+  volatile_organic_compounds: "mdi:molecule",
+  volatile_organic_compounds_parts: "mdi:molecule",
+  nitrogen_dioxide: "mdi:molecule",
+  ozone: "mdi:weather-windy",
+  aqi: "mdi:air-filter",
+  illuminance: "mdi:brightness-5",
+  pressure: "mdi:gauge",
+  atmospheric_pressure: "mdi:gauge",
+  power: "mdi:flash",
+  energy: "mdi:lightning-bolt",
+  battery: "mdi:battery",
+});
+
+/** Short German names (overview card, missing friendly names). */
+const TYPE_NAMES = Object.freeze({
+  temperature: "Temperatur",
+  humidity: "Luftfeuchtigkeit",
+  carbon_dioxide: "CO₂",
+  pm25: "Feinstaub (PM2.5)",
+  pm10: "Feinstaub (PM10)",
+  pm1: "Feinstaub (PM1)",
+  volatile_organic_compounds: "VOC",
+  volatile_organic_compounds_parts: "VOC",
+});
+
+const { blue, green, amber, red } = LEVEL_COLORS;
+// severity: 0 = good, 1 = moderate, 2 = bad (used for the overall rating)
+const L = (value, label, color, severity, icon) => ({ value, label, color, severity, ...(icon ? { icon } : {}) });
+
+/** Presets: each level applies from `value` upwards (first level: everything below). */
+const LEVEL_PRESETS = Object.freeze({
+  // slight deviations ("Eher kühl") do not lower the overall air rating
+  temperature: [
+    L(null, "Zu kalt", blue, 1, "mdi:snowflake"),
+    L(15, "Eher kühl", amber, 0),
+    L(19, "Optimal", green, 0),
+    L(24, "Eher warm", amber, 0),
+    L(26, "Zu warm", red, 1),
+  ],
+  humidity: [
+    L(null, "Zu trocken", red, 1),
+    L(30, "Eher trocken", amber, 0),
+    L(40, "Optimal", green, 0),
+    L(60, "Eher feucht", amber, 0),
+    L(70, "Zu feucht", red, 1),
+  ],
+  carbon_dioxide: [L(null, "Gut", green, 0), L(800, "Erhöht", amber, 1, "mdi:diamond"), L(1400, "Kritisch", red, 2)],
+  pm25: [L(null, "Sehr gut", green, 0), L(5, "Gut", green, 0), L(15, "Erhöht", amber, 1), L(25, "Schlecht", red, 2), L(50, "Sehr schlecht", red, 2)],
+  pm10: [L(null, "Sehr gut", green, 0), L(15, "Gut", green, 0), L(45, "Erhöht", amber, 1), L(75, "Schlecht", red, 2)],
+  pm1: [L(null, "Sehr gut", green, 0), L(5, "Gut", green, 0), L(15, "Erhöht", amber, 1), L(25, "Schlecht", red, 2)],
+  volatile_organic_compounds: [L(null, "Gut", green, 0), L(300, "Erhöht", amber, 1), L(1000, "Schlecht", red, 2)],
+  volatile_organic_compounds_parts: [L(null, "Gut", green, 0), L(300, "Erhöht", amber, 1), L(1000, "Schlecht", red, 2)],
+});
+
+/** Range of the status ring per sensor type (value → ring fill). */
+const RING_RANGES = Object.freeze({
+  temperature: [0, 40],
+  humidity: [0, 100],
+  moisture: [0, 100],
+  carbon_dioxide: [400, 2000],
+  pm25: [0, 75],
+  pm10: [0, 150],
+  pm1: [0, 75],
+  volatile_organic_compounds: [0, 2000],
+  battery: [0, 100],
+  illuminance: [0, 1000],
+});
+
+/** Overall rating of several sensors by the worst severity. */
+const RATINGS = Object.freeze([
+  { label: "Gut", text: "Angenehme Raumluft", color: green },
+  { label: "Mäßig", text: "Lüften empfohlen", color: amber },
+  { label: "Schlecht", text: "Bitte lüften", color: red },
+]);
+
+/**
+ * Normalise a level list: [{ value?, label, color, severity?, icon? }].
+ * `auto`/true → preset for the device class (or null), false → null.
+ * Returns a list sorted by value (a level without value comes first) or null.
+ */
+function resolveLevels(config, deviceClass) {
+  if (config === false || config === null) return null;
+  if (config === undefined || config === true || config === "auto") {
+    return LEVEL_PRESETS[deviceClass] ? LEVEL_PRESETS[deviceClass].map((l) => ({ ...l })) : null;
+  }
+  if (typeof config === "string") return LEVEL_PRESETS[config] ? LEVEL_PRESETS[config].map((l) => ({ ...l })) : null;
+  if (!Array.isArray(config)) return null;
+  const list = config
+    .filter(isPlainObject)
+    .map((l) => {
+      const v = l.value === undefined || l.value === null || l.value === "" ? null : parseNumber(l.value);
+      const severity = parseNumber(l.severity);
+      return {
+        value: v,
+        label: l.label === undefined || l.label === null ? "" : String(l.label),
+        color: isSafeCssValue(l.color) ? l.color : green,
+        severity: severity === null ? null : Math.max(0, Math.min(2, Math.round(severity))),
+        ...(typeof l.icon === "string" && l.icon ? { icon: l.icon } : {}),
+      };
+    });
+  list.sort((a, b) => (a.value === null ? -Infinity : a.value) - (b.value === null ? -Infinity : b.value));
+  // severity not given: guess from the color (green good, red bad, else moderate)
+  for (const l of list) {
+    if (l.severity !== null) continue;
+    const c = String(l.color).toLowerCase();
+    l.severity = c === green || c.includes("green") || c === "#16a34a" ? 0 : c === red || c.includes("red") || c === "#dc2626" ? 2 : 1;
+  }
+  return list.length ? list : null;
+}
+
+/** Level for a value: the last level whose `value` is ≤ the value. */
+function findLevel(value, levels) {
+  const v = parseNumber(value);
+  if (v === null || !Array.isArray(levels) || !levels.length) return null;
+  let found = null;
+  for (const l of levels) {
+    if (l.value === null || v >= l.value) found = l;
+  }
+  return found ?? levels[0];
+}
+
+/** Ring fill 0…1 for a value. */
+function ringFraction(value, deviceClass, range) {
+  const v = parseNumber(value);
+  if (v === null) return 0;
+  const [lo, hi] = Array.isArray(range) && range.length === 2 ? range.map(Number) : RING_RANGES[deviceClass] || [0, 100];
+  if (!(hi > lo)) return 0;
+  return Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
+}
+
+/** Overall rating for a list of levels (null entries are ignored). */
+function overallRating(levels, ratings = RATINGS) {
+  const sev = levels.filter(Boolean).map((l) => l.severity ?? 0);
+  if (!sev.length) return null;
+  const worst = Math.max(...sev);
+  return { severity: worst, ...ratings[Math.min(worst, ratings.length - 1)] };
+}
+return { LEVEL_COLORS, TYPE_COLORS, TYPE_ICONS, TYPE_NAMES, LEVEL_PRESETS, RING_RANGES, RATINGS, resolveLevels, findLevel, ringFraction, overallRating };
+})();
+
 // ---- src/config-validator.js
 const __m_config_validator_js = (() => {
 /**
@@ -2247,6 +2502,7 @@ const { AGGREGATIONS, FILL_MODES } = __m_data_reducer_js;
 const { ACTIONS, DEFAULT_HOLD_TIME, DEFAULT_DOUBLE_TAP_WINDOW, isToggleableDomain } = __m_action_handler_js;
 const { VALUE_TYPES, VALUE_FORMATS } = __m_value_formatter_js;
 const { MIN_UPDATE_INTERVAL } = __m_history_provider_js;
+const { LEVEL_PRESETS } = __m_levels_js;
 
 const GRAPH_POSITIONS = ["full", "after-icon", "left", "right", "bottom", "icon-area", "custom"];
 const COLOR_MODES = ["fixed", "state", "thresholds", "gradient", "sign"];
@@ -2508,6 +2764,55 @@ const DESIGN_DEFAULTS = Object.freeze({
   }),
 });
 const DESIGN_SIZES = ["normal", "double"];
+const INFO_DESIGNS = ["standard", "tile", "ring", "compact"];
+
+const ACCENT_ALL = (pct) => {
+  const v = `color-mix(in srgb, var(--sgbc-accent) ${pct}%, transparent)`;
+  return { on: v, off: v, unavailable: v, other: v };
+};
+const INFO_DESIGN_BASE = {
+  levels: "auto",
+  accent_color: "auto",
+  icon_area: {
+    shape: "circle",
+    size: "40px",
+    icon_size: "22px",
+    color: { on: "var(--sgbc-accent)", off: "var(--sgbc-accent)", other: "var(--sgbc-accent)", unavailable: "var(--disabled-text-color, #6b7280)" },
+    background: ACCENT_ALL(16),
+  },
+  name_style: { font_size: "14px", font_weight: 600 },
+  layout: { height: "128px", padding: "12px 14px", border_radius: "16px" },
+  state_background: { enabled: true, colors: ACCENT_ALL(7) },
+  graph: {
+    type: "smooth-area",
+    position: "bottom",
+    height: "40%",
+    baseline: "bottom",
+    color_mode: "fixed",
+    color: "var(--sgbc-accent)",
+    line_width: 1.5,
+    fill_opacity: 0.3,
+    opacity: 1,
+    max_points: 48,
+    headroom: 0.35,
+  },
+};
+/** Info card designs (pictures: modern tile, status ring, compact status tile). */
+const INFO_DESIGN_DEFAULTS = Object.freeze({
+  tile: INFO_DESIGN_BASE,
+  ring: mergeDeep(INFO_DESIGN_BASE, {
+    icon_area: { size: "50px", icon_size: "24px", background: ACCENT_ALL(10) },
+    graph: { height: "34%" },
+  }),
+  compact: mergeDeep(INFO_DESIGN_BASE, {
+    accent_color: "level",
+    show_name: false,
+    icon_area: { shape: "rounded-square", size: "28px", icon_size: "18px" },
+    layout: { padding: "10px 8px", min_width: "0px" },
+    state_background: { colors: ACCENT_ALL(10) },
+    graph: { height: "30%", max_points: 36 },
+  }),
+});
 /** design_size: double – twice the button height, larger icon and text. */
 const DESIGN_DOUBLE = {
   icon_area: { size: "50px", icon_size: "28px" },
@@ -2524,7 +2829,8 @@ const DESIGN_DOUBLE_EXTRA = {
 };
 
 /** Defaults a design brings along (normal or double height). */
-function designDefaults(design, size = "normal") {
+function designDefaults(design, size = "normal", info = false) {
+  if (info) return INFO_DESIGN_DEFAULTS[design] || {};
   if (!DESIGN_DEFAULTS[design]) return {};
   if (size !== "double") return DESIGN_DEFAULTS[design];
   return mergeDeep(mergeDeep(DESIGN_DEFAULTS[design], DESIGN_DOUBLE), DESIGN_DOUBLE_EXTRA[design] || {});
@@ -2554,12 +2860,14 @@ function validateConfig(raw) {
     throw new ConfigError(`variant „${raw.variant}“ ist ungültig. Erlaubt: button, info.`);
   }
   const isInfo = raw.variant === "info";
-  const design = isInfo || raw.design === undefined ? "standard" : raw.design;
-  if (!DESIGNS.includes(design)) throw new ConfigError(`design „${raw.design}“ ist ungültig. Erlaubt: ${DESIGNS.join(", ")}.`);
-  const isDesign = design !== "standard";
+  const design = raw.design === undefined ? "standard" : raw.design;
+  const allowedDesigns = isInfo ? INFO_DESIGNS : DESIGNS;
+  if (!allowedDesigns.includes(design)) throw new ConfigError(`design „${raw.design}“ ist ungültig. Erlaubt: ${allowedDesigns.join(", ")}.`);
+  const isInfoDesign = isInfo && design !== "standard";
+  const isDesign = !isInfo && design !== "standard";
   const designSize = raw.design_size === undefined ? "normal" : raw.design_size;
   if (!DESIGN_SIZES.includes(designSize)) throw new ConfigError(`design_size „${raw.design_size}“ ist ungültig. Erlaubt: ${DESIGN_SIZES.join(", ")}.`);
-  const base = isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : isDesign ? mergeDeep(DEFAULTS, designDefaults(design, designSize)) : DEFAULTS;
+  const base = isInfo ? mergeDeep(mergeDeep(DEFAULTS, INFO_DEFAULTS), isInfoDesign ? INFO_DESIGN_DEFAULTS[design] : {}) : isDesign ? mergeDeep(DEFAULTS, designDefaults(design, designSize)) : DEFAULTS;
   const c = mergeDeep(base, raw);
   c.variant = isInfo ? "info" : "button";
   c.design = design;
@@ -2690,7 +2998,23 @@ function validateConfig(raw) {
 
   // ---- large value on the right ("9 W / aktuell")
   c.values.status_dot = Boolean(c.values.status_dot);
-  c.hero = normalizeHero(raw.hero, design, c, err);
+  c.hero = isInfo ? undefined : normalizeHero(raw.hero, design, c, err);
+  // ---- status levels ("Optimal", "Zu warm" …) and status ring
+  if (c.levels === undefined) c.levels = false;
+  if (Array.isArray(c.levels)) {
+    c.levels.forEach((l, i) => {
+      if (!isPlainObject(l)) return err(`levels[${i}] muss ein Objekt sein (value, label, color).`);
+      if (!isSafeCssValue(l.color)) err(`levels[${i}].color fehlt oder ist ungültig.`);
+      if (l.value !== undefined && l.value !== null && parseNumber(l.value) === null) err(`levels[${i}].value muss eine Zahl sein.`);
+    });
+  } else if (![true, false, "auto", ...Object.keys(LEVEL_PRESETS)].includes(c.levels)) {
+    err(`levels muss auto, false, eine Liste oder ein Sensortyp (${Object.keys(LEVEL_PRESETS).join(", ")}) sein.`);
+  }
+  if (c.ring !== undefined) {
+    if (!isPlainObject(c.ring) || parseNumber(c.ring.min) === null || parseNumber(c.ring.max) === null || parseNumber(c.ring.max) <= parseNumber(c.ring.min)) {
+      err("ring benötigt min und max (Zahlen, max > min).");
+    }
+  }
   if (!isPlainObject(c.accent_color) && !isSafeCssValue(c.accent_color)) err("accent_color ist keine gültige Farbe.");
 
   // ---- state background / layers
@@ -2988,7 +3312,7 @@ function normalizeGraph(rawGraph, c, err) {
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }
-return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, VALUE_POSITIONS, INFO_ICON_POSITIONS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, TEXT_CONTRAST_MODES, DESIGNS, HERO_STYLES, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, DESIGN_DEFAULTS, DESIGN_SIZES, designDefaults, validateConfig, fadeLength };
+return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, VALUE_POSITIONS, INFO_ICON_POSITIONS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, TEXT_CONTRAST_MODES, DESIGNS, HERO_STYLES, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, DESIGN_DEFAULTS, DESIGN_SIZES, INFO_DESIGNS, INFO_DESIGN_DEFAULTS, designDefaults, validateConfig, fadeLength };
 })();
 
 // ---- src/color-utils.js
@@ -3077,8 +3401,15 @@ const DESIGNS = [
   ["badge", "Farbiger Status mit Verbrauchsbereich"],
   ["sparkline", "Minimalistisch mit Sparkline"],
 ];
+const INFO_DESIGNS = [
+  ["standard", "Standard"],
+  ["tile", "Moderne Kachel (Wert, Status, Graph)"],
+  ["ring", "Kachel mit Zustandsring"],
+  ["compact", "Kompakte Statuskachel (Farbe nach Messwert)"],
+];
 const HERO_DESIGNS = ["subtle", "split", "badge"];
-const TINT_DESIGNS = ["subtle", "badge"];
+const TINT_DESIGNS = ["subtle", "badge", "tile", "ring", "compact"];
+const NAMELESS_DESIGNS = ["compact"];
 
 const VALUE_POSITIONS = [
   ["top-left", "Oben links (unter dem Namen)"],
@@ -3161,6 +3492,7 @@ const LABELS = {
   variant: "Darstellung",
   design: "Design",
   design_double: "Doppelte Höhe (2 × Button-Höhe)",
+  levels_enabled: "Zustand anzeigen (z. B. „Optimal“, „Zu warm“)",
   hero_enabled: "Großen Wert rechts anzeigen",
   hero_caption: "Beschriftung unter dem großen Wert",
   name: "Name",
@@ -3217,7 +3549,10 @@ function mainSchema(cfg) {
     },
     { name: "show_name", selector: { boolean: {} } },
     ...(isInfoConfig(cfg)
-      ? []
+      ? [
+          { name: "design", selector: { select: { mode: "dropdown", options: options(INFO_DESIGNS) } } },
+          ...(designOf(cfg) !== "standard" ? [{ name: "levels_enabled", selector: { boolean: {} } }] : []),
+        ]
       : [
           { name: "design", selector: { select: { mode: "dropdown", options: options(DESIGNS) } } },
           ...(isDesign(cfg) ? [{ name: "design_double", selector: { boolean: {} } }] : []),
@@ -3354,8 +3689,9 @@ const clone = (v) => JSON.parse(JSON.stringify(v ?? {}));
 
 /** Info cards have the graph enabled by default and other graph defaults. */
 const isInfoConfig = (c) => c?.variant === "info" || c?.type === "custom:smart-graph-info-card";
-const designOf = (c) => (isInfoConfig(c) ? "standard" : c?.design || "standard");
-const isDesign = (c) => designOf(c) !== "standard";
+const designOf = (c) => c?.design || "standard";
+/** Button designs (subtle, split, badge, sparkline) – info designs are handled separately. */
+const isDesign = (c) => !isInfoConfig(c) && designOf(c) !== "standard";
 const defaultColorMode = (c) => (isInfoConfig(c) || isDesign(c) ? "fixed" : "state");
 const heroOn = (c) => (c?.hero === undefined ? HERO_DESIGNS.includes(designOf(c)) : c.hero !== false && c.hero !== null);
 
@@ -3383,6 +3719,7 @@ function configToForm(config) {
     icon: typeof c.icon === "string" ? c.icon : undefined,
     design: designOf(c),
     design_double: c.design_size === "double",
+    levels_enabled: c.levels !== false,
     hero_enabled: heroOn(c),
     hero_caption: c.hero && typeof c.hero === "object" && c.hero.caption !== undefined ? String(c.hero.caption ?? "") : undefined,
     value_1_enabled: c.value_1 === undefined ? isDesign(c) : Boolean(c.value_1),
@@ -3402,7 +3739,7 @@ function configToForm(config) {
     graph_color_mode: get(c, "graph.color_mode") || defaultColorMode(c),
     graph_threshold_mode: get(c, "graph.threshold_mode") || "current",
     graph_threshold_blend: get(c, "graph.threshold_blend") || "hard",
-    show_name: c.show_name !== false,
+    show_name: isInfoConfig(c) && NAMELESS_DESIGNS.includes(designOf(c)) ? c.show_name === true : c.show_name !== false,
     value_position: c.value_position || "top-left",
     value_offset_x: pxNumber(get(c, "value_offset.x")),
     value_offset_y: pxNumber(get(c, "value_offset.y")),
@@ -3434,9 +3771,33 @@ function formToConfig(config, form) {
   else if (d.icon_position === "name-left") delete out.icon_position;
   if (d.value_position && d.value_position !== "top-left") out.value_position = d.value_position;
   else if (d.value_position === "top-left") delete out.value_position;
+  const namelessDefault = isInfoConfig(out) && NAMELESS_DESIGNS.includes(designOf(out));
   if (d.show_name === false) out.show_name = false;
+  else if (d.show_name === true && namelessDefault) out.show_name = true;
   else delete out.show_name;
-  if (d.variant && out.type !== "custom:smart-graph-info-card") setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
+  if (isInfoConfig(out) && designOf(out) !== "standard" && d.levels_enabled !== undefined) {
+    if (d.levels_enabled === false) out.levels = false;
+    else if (out.levels === false) delete out.levels;
+  }
+  if (d.variant && out.type !== "custom:smart-graph-info-card") {
+    const before = isInfoConfig(config) ? "info" : "button";
+    setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
+    if (d.variant !== before) {
+      // designs differ between button and info card
+      for (const key of ["design", "design_size", "hero", "levels", "accent_color"]) delete out[key];
+      return out;
+    }
+  }
+  if (d.design !== undefined && isInfoConfig(out) && d.design !== designOf(config)) {
+    setPath(out, "design", d.design === "standard" ? undefined : d.design);
+    for (const path of ["graph.type", "graph.position", "graph.color_mode", "graph.color", "graph.height", "state_background.enabled", "layout.height", "icon_area.shape"]) {
+      setPath(out, path, undefined);
+      pruneEmpty(out, path);
+    }
+    for (const key of ["show_name", "levels", "accent_color"]) delete out[key];
+    if (out.graph && Object.keys(out.graph).length === 0) delete out.graph;
+    return out;
+  }
   if (d.design !== undefined && !isInfoConfig(out) && d.design !== designOf(config)) {
     // a new design brings its own look: drop the settings it provides, keep entities and texts
     setPath(out, "design", d.design === "standard" ? undefined : d.design);
@@ -3974,6 +4335,624 @@ if (typeof customElements !== "undefined" && !customElements.get(EDITOR_TAG)) {
 return { EDITOR_TAG, DEFAULT_THRESHOLDS, setPath, pruneEmpty, configToForm, formToConfig };
 })();
 
+// ---- src/overview-card.js
+const __m_overview_card_js = (() => {
+/**
+ * Smart Graph Overview Card – several sensors in one card (e.g. room air):
+ * overall rating, all values side by side and one history graph that can be
+ * switched between the sensors.
+ *
+ * type: custom:smart-graph-overview-card
+ */
+const { fetchHistory } = __m_history_provider_js;
+const { reduceSeries, appendPoint } = __m_data_reducer_js;
+const { renderGraphSVG } = __m_graph_renderer_js;
+const { formatNumber, getNumberLocale, getLanguage } = __m_value_formatter_js;
+const { resolveLevels, findLevel, overallRating, TYPE_COLORS, TYPE_ICONS, TYPE_NAMES, RATINGS } = __m_levels_js;
+const { parseNumber, isPlainObject, isSafeCssValue } = __m_utils_js;
+const { isUnavailableState } = __m_state_resolver_js;
+
+const OVERVIEW_TAG = "smart-graph-overview-card";
+const OVERVIEW_EDITOR_TAG = "smart-graph-overview-card-editor";
+
+const Base = typeof HTMLElement !== "undefined" ? HTMLElement : class {};
+const ENTITY_RE = /^[a-z_]+\.[a-z0-9_]+$/;
+const FALLBACK_COLOR = "var(--primary-color, #03a9f4)";
+
+class OverviewConfigError extends Error {}
+
+/** Validate and normalise the overview card config. Throws OverviewConfigError. */
+function validateOverviewConfig(raw) {
+  if (!isPlainObject(raw)) throw new OverviewConfigError("Die Konfiguration muss ein Objekt sein.");
+  const errors = [];
+  const list = Array.isArray(raw.entities) ? raw.entities : [];
+  if (!list.length) errors.push("entities fehlt: mindestens ein Sensor wird benötigt.");
+  const entities = list.map((e, i) => {
+    const item = typeof e === "string" ? { entity: e } : isPlainObject(e) ? { ...e } : {};
+    if (typeof item.entity !== "string" || !ENTITY_RE.test(item.entity)) errors.push(`entities[${i}]: „${item.entity ?? e}“ ist keine gültige Entity-ID.`);
+    if (item.color !== undefined && !isSafeCssValue(item.color)) errors.push(`entities[${i}].color ist ungültig.`);
+    if (item.decimals !== undefined) {
+      const d = parseNumber(item.decimals);
+      if (d === null || d < 0 || d > 6 || !Number.isInteger(d)) errors.push(`entities[${i}].decimals muss 0 bis 6 sein.`);
+      else item.decimals = d;
+    }
+    if (item.levels === undefined) item.levels = "auto";
+    return item;
+  });
+  const hours = raw.hours_to_show === undefined ? 24 : parseNumber(raw.hours_to_show);
+  if (hours === null || hours <= 0 || hours > 8760) errors.push("hours_to_show muss zwischen 0 und 8760 liegen.");
+  const interval = raw.update_interval === undefined ? 300 : parseNumber(raw.update_interval);
+  if (interval === null || interval < 10) errors.push("update_interval muss mindestens 10 Sekunden sein.");
+  const graphEntity = raw.graph_entity ?? entities[0]?.entity;
+  if (graphEntity !== undefined && !entities.some((e) => e.entity === graphEntity)) errors.push("graph_entity muss einer der entities sein.");
+  const ratings = Array.isArray(raw.ratings) ? raw.ratings.map((r, i) => ({ ...RATINGS[Math.min(i, RATINGS.length - 1)], ...(isPlainObject(r) ? r : {}) })) : RATINGS;
+  if (errors.length) throw new OverviewConfigError(errors.join("\n"));
+  return {
+    type: raw.type,
+    title: raw.title === undefined ? "Luftqualität" : String(raw.title ?? ""),
+    icon: typeof raw.rating_icon === "string" ? raw.rating_icon : "mdi:leaf",
+    show_rating: raw.show_rating !== false,
+    show_graph: raw.show_graph !== false,
+    show_axis: raw.show_axis !== false,
+    entities,
+    graph_entity: graphEntity,
+    hours_to_show: hours,
+    update_interval: interval,
+    max_points: Math.max(10, Math.min(300, parseNumber(raw.max_points) ?? 96)),
+    graph_height: isSafeCssValue(raw.graph_height) ? String(raw.graph_height) : "86px",
+    ratings,
+  };
+}
+
+/** Time axis ticks between start and end (ms): aligned to full hours/days. */
+function timeTicks(start, end, maxTicks = 6) {
+  const span = end - start;
+  if (!(span > 0)) return [];
+  const hour = 3600e3;
+  const steps = [1, 2, 3, 4, 6, 8, 12, 24, 48, 72, 168].map((h) => h * hour);
+  const step = steps.find((s) => span / s <= maxTicks) ?? steps[steps.length - 1];
+  const out = [];
+  // align to local time
+  const first = new Date(start);
+  first.setMinutes(0, 0, 0);
+  if (step >= 24 * hour) first.setHours(0);
+  let t = first.getTime();
+  const stepHours = step / hour;
+  if (stepHours < 24) {
+    while (new Date(t).getHours() % stepHours !== 0) t += hour;
+  }
+  for (; t <= end; t += step) if (t >= start) out.push(t);
+  return out;
+}
+
+const STYLES = `
+:host { display: block; }
+ha-card.sgoc {
+  display: block;
+  container-type: inline-size;
+  box-sizing: border-box;
+  padding: 16px;
+  border-radius: var(--ha-card-border-radius, 16px);
+  color: var(--primary-text-color);
+  overflow: hidden;
+}
+.top { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.rating { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 0 1 auto; }
+.rating.hidden, .sep.hidden, .panel.hidden, .axis.hidden { display: none; }
+.r-icon {
+  flex: none; width: 52px; height: 52px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--sgoc-rating, #22c55e) 16%, transparent);
+  color: var(--sgoc-rating, #22c55e);
+  --mdc-icon-size: 28px;
+}
+.r-texts { display: flex; flex-direction: column; min-width: 0; }
+.r-title { font-size: 13px; font-weight: 600; }
+.r-label { font-size: 22px; font-weight: 700; line-height: 1.15; color: color-mix(in srgb, var(--sgoc-rating, #22c55e) 78%, var(--primary-text-color)); }
+.r-text { font-size: 12px; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sep { align-self: stretch; width: 1px; background: var(--divider-color, rgba(127, 127, 127, 0.25)); flex: none; }
+.items { display: flex; flex: 1 1 auto; justify-content: space-around; gap: 8px; min-width: 0; }
+.item {
+  all: unset; box-sizing: border-box; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  min-width: 0; padding: 4px 6px; border-radius: 10px;
+}
+.item:hover { background: color-mix(in srgb, var(--primary-text-color) 5%, transparent); }
+.item:focus-visible { box-shadow: 0 0 0 2px var(--primary-color, #03a9f4); }
+.i-icon {
+  width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--c); --mdc-icon-size: 18px;
+}
+.i-value { font-size: 16px; font-weight: 700; white-space: nowrap; }
+.i-unit { font-size: 0.72em; font-weight: 500; color: var(--secondary-text-color); margin-left: 3px; }
+.panel {
+  margin-top: 14px; padding: 10px 12px 6px; border-radius: 12px;
+  background: color-mix(in srgb, var(--primary-text-color) 3.5%, transparent);
+}
+.p-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.p-title { font-size: 12px; color: var(--secondary-text-color); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  all: unset; box-sizing: border-box; cursor: pointer; font-size: 11.5px; padding: 4px 11px; border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); color: var(--primary-text-color);
+}
+.chip:focus-visible { box-shadow: 0 0 0 2px var(--primary-color, #03a9f4); }
+.chip.active { background: color-mix(in srgb, var(--c) 80%, #000); color: #fff; }
+.chart { position: relative; height: var(--sgoc-graph-height, 86px); margin-top: 8px; }
+.chart svg { display: block; width: 100%; height: 100%; }
+.axis { position: relative; height: 16px; font-size: 10.5px; color: var(--secondary-text-color); }
+.axis span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+.axis span.first { transform: none; }
+.empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--secondary-text-color); }
+.empty.hidden { display: none; }
+@container (max-width: 560px) {
+  .top { flex-direction: column; align-items: stretch; gap: 12px; }
+  .sep { display: none; }
+  .items { justify-content: space-between; flex-wrap: wrap; }
+  .p-head { flex-direction: column; align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+ha-card.sgoc-error { display: block; padding: 12px 14px; border: 1px solid var(--error-color, #db4437); }
+ha-card.sgoc-error .title { font-weight: 600; color: var(--error-color, #db4437); margin-bottom: 4px; }
+ha-card.sgoc-error .msg { white-space: pre-wrap; font-size: 13px; }
+`;
+
+function el(tag, className, attrs) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (attrs) for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+}
+
+let uid = 0;
+
+class SmartGraphOverviewCard extends Base {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._uid = `sgoc${++uid}`;
+    this._points = [];
+    this._loaded = false;
+    this._token = 0;
+    this._size = { w: 0, h: 0 };
+  }
+
+  static getConfigElement() {
+    return document.createElement(OVERVIEW_EDITOR_TAG);
+  }
+
+  static getStubConfig(hass) {
+    const states = hass?.states || {};
+    const ids = Object.keys(states).filter((id) => id.startsWith("sensor."));
+    const pick = [];
+    for (const dc of ["temperature", "humidity", "carbon_dioxide", "pm25"]) {
+      const id = ids.find((i) => states[i]?.attributes?.device_class === dc);
+      if (id) pick.push(id);
+    }
+    return { title: "Luftqualität", entities: pick.length ? pick : ids.slice(0, 3).length ? ids.slice(0, 3) : ["sensor.example"] };
+  }
+
+  setConfig(config) {
+    try {
+      this._config = validateOverviewConfig(config);
+      this._error = null;
+    } catch (err) {
+      this._config = null;
+      this._error = err.message;
+    }
+    this._selected = this._config?.graph_entity;
+    this._points = [];
+    this._loaded = false;
+    this._token++;
+    this._render();
+    if (this._connected) this._attach();
+  }
+
+  set hass(hass) {
+    const old = this._hass;
+    this._hass = hass;
+    if (!this._config || !this._els) return;
+    let changed = !old || old.themes !== hass.themes || old.locale !== hass.locale;
+    for (const e of this._config.entities) if (old?.states?.[e.entity] !== hass.states?.[e.entity]) changed = true;
+    if (changed) this._update();
+    const s = hass.states?.[this._selected];
+    if (this._loaded && s && s !== old?.states?.[this._selected]) {
+      const t = Date.parse(s.last_changed || s.last_updated);
+      if (Number.isFinite(t)) {
+        this._points = appendPoint(this._points, { t, v: parseNumber(s.state) }, Date.now() - this._config.hours_to_show * 3600e3);
+        this._drawGraph();
+      }
+    }
+    if (!this._loaded && this._connected && !this._fetching) this._fetch();
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
+  getCardSize() {
+    return this._config?.show_graph === false ? 2 : 5;
+  }
+
+  getGridOptions() {
+    return { columns: 12, rows: "auto", min_columns: 6 };
+  }
+
+  connectedCallback() {
+    this._connected = true;
+    if (this._config) this._attach();
+  }
+
+  disconnectedCallback() {
+    this._connected = false;
+    this._detach();
+  }
+
+  _attach() {
+    this._detach();
+    if (!this._config || !this._els) return;
+    if (typeof ResizeObserver !== "undefined") {
+      this._ro = new ResizeObserver((entries) => {
+        const r = entries[entries.length - 1]?.contentRect;
+        if (!r) return;
+        const w = Math.round(r.width);
+        const h = Math.round(r.height);
+        if (w !== this._size.w || h !== this._size.h) {
+          this._size = { w, h };
+          this._drawGraph();
+        }
+      });
+      this._ro.observe(this._els.chart);
+    }
+    this._timer = setInterval(() => this._fetch(), this._config.update_interval * 1000);
+    if (this._hass) this._fetch();
+  }
+
+  _detach() {
+    if (this._ro) this._ro.disconnect();
+    this._ro = null;
+    if (this._timer) clearInterval(this._timer);
+    this._timer = null;
+    this._token++;
+    this._fetching = false;
+  }
+
+  // ------------------------------------------------------------ rendering
+
+  _render() {
+    const root = this.shadowRoot;
+    root.innerHTML = "";
+    const style = el("style");
+    style.textContent = STYLES;
+    if (!this._config) {
+      const card = el("ha-card", "sgoc-error", { role: "alert" });
+      const t = el("div", "title");
+      t.textContent = "Smart Graph Overview Card – Konfigurationsfehler";
+      const m = el("div", "msg");
+      m.textContent = this._error || "Unbekannter Fehler";
+      card.append(t, m);
+      root.append(style, card);
+      this._els = null;
+      return;
+    }
+    const c = this._config;
+    const card = el("ha-card", "sgoc");
+    const top = el("div", "top");
+    const rating = el("div", `rating${c.show_rating ? "" : " hidden"}`);
+    const rIcon = el("div", "r-icon");
+    const rGlyph = el("ha-icon", "", { icon: c.icon });
+    rGlyph.icon = c.icon;
+    rIcon.append(rGlyph);
+    const rTexts = el("div", "r-texts");
+    const rTitle = el("div", "r-title");
+    rTitle.textContent = c.title;
+    const rLabel = el("div", "r-label");
+    const rText = el("div", "r-text");
+    rTexts.append(rTitle, rLabel, rText);
+    rating.append(rIcon, rTexts);
+    const sep = el("div", `sep${c.show_rating ? "" : " hidden"}`);
+    const items = el("div", "items");
+    const itemEls = c.entities.map((e) => {
+      const btn = el("button", "item", { type: "button" });
+      const icon = el("div", "i-icon");
+      const glyph = el("ha-icon");
+      icon.append(glyph);
+      const value = el("div", "i-value");
+      const num = el("span", "i-num");
+      const unit = el("span", "i-unit");
+      value.append(num, unit);
+      btn.append(icon, value);
+      btn.addEventListener("click", () => this._moreInfo(e.entity));
+      items.append(btn);
+      return { btn, icon, glyph, num, unit };
+    });
+    top.append(rating, sep, items);
+
+    const panel = el("div", `panel${c.show_graph ? "" : " hidden"}`);
+    const head = el("div", "p-head");
+    const pTitle = el("div", "p-title");
+    pTitle.textContent = `Verlauf (letzte ${formatHours(c.hours_to_show)})`;
+    const chips = el("div", "chips", { role: "tablist" });
+    const chipEls = c.entities.map((e) => {
+      const chip = el("button", "chip", { type: "button", role: "tab" });
+      chip.addEventListener("click", () => this._select(e.entity));
+      chips.append(chip);
+      return chip;
+    });
+    if (c.entities.length < 2) chips.style.display = "none";
+    head.append(pTitle, chips);
+    const chart = el("div", "chart");
+    chart.style.setProperty("--sgoc-graph-height", c.graph_height);
+    const graph = el("div", "graph-svg");
+    graph.style.cssText = "position:absolute;inset:0";
+    const empty = el("div", "empty hidden");
+    chart.append(graph, empty);
+    const axis = el("div", `axis${c.show_axis ? "" : " hidden"}`);
+    panel.append(head, chart, axis);
+    card.append(top, panel);
+    root.append(style, card);
+    this._els = { card, rating, rLabel, rText, rIcon, items: itemEls, chips: chipEls, chart, graph, empty, axis, pTitle };
+    if (this._hass) this._update();
+  }
+
+  _info(e) {
+    const s = this._hass?.states?.[e.entity];
+    const dc = s?.attributes?.device_class;
+    const color = e.color || TYPE_COLORS[dc] || FALLBACK_COLOR;
+    const name = e.name || TYPE_NAMES[dc] || s?.attributes?.friendly_name || e.entity;
+    const icon = e.icon || s?.attributes?.icon || TYPE_ICONS[dc] || "mdi:eye";
+    return { s, dc, color, name, icon };
+  }
+
+  _update() {
+    const c = this._config;
+    const els = this._els;
+    if (!c || !els || !this._hass) return;
+    const locale = getNumberLocale(this._hass);
+    const levels = [];
+    c.entities.forEach((e, i) => {
+      const { s, dc, color, name, icon } = this._info(e);
+      const ref = els.items[i];
+      ref.btn.style.setProperty("--c", color);
+      if (ref.glyph.icon !== icon) {
+        ref.glyph.icon = icon;
+        ref.glyph.setAttribute("icon", icon);
+      }
+      const unavailable = !s || isUnavailableState(s.state);
+      const n = unavailable ? null : parseNumber(s.state);
+      let decimals = e.decimals;
+      if (decimals === undefined) {
+        const p = this._hass.entities?.[e.entity]?.display_precision;
+        if (Number.isInteger(p)) decimals = p;
+      }
+      ref.num.textContent = n === null ? (unavailable ? "–" : String(s.state)) : formatNumber(n, { decimals, locale }) ?? "–";
+      const unit = e.unit ?? s?.attributes?.unit_of_measurement ?? "";
+      ref.unit.textContent = n === null ? "" : unit;
+      ref.btn.title = name;
+      ref.btn.setAttribute("aria-label", `${name}: ${ref.num.textContent}${unit ? ` ${unit}` : ""}`);
+      const chip = els.chips[i];
+      chip.textContent = name;
+      chip.style.setProperty("--c", color);
+      chip.classList.toggle("active", e.entity === this._selected);
+      chip.setAttribute("aria-selected", String(e.entity === this._selected));
+      if (!unavailable) levels.push(findLevel(n, resolveLevels(e.levels, dc)));
+    });
+    const r = overallRating(levels, c.ratings);
+    els.rating.style.setProperty("--sgoc-rating", r?.color || "var(--secondary-text-color)");
+    els.rLabel.textContent = r ? r.label : "–";
+    els.rText.textContent = r ? r.text : "Keine Bewertung möglich";
+  }
+
+  _select(entityId) {
+    if (entityId === this._selected) return;
+    this._selected = entityId;
+    this._points = [];
+    this._loaded = false;
+    this._token++;
+    this._fetching = false;
+    this._update();
+    this._drawGraph();
+    this._fetch();
+  }
+
+  _moreInfo(entityId) {
+    this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }));
+  }
+
+  async _fetch() {
+    const c = this._config;
+    if (!c?.show_graph || !this._hass || !this._connected || !this._selected) return;
+    const token = ++this._token;
+    this._fetching = true;
+    const entityId = this._selected;
+    const res = await fetchHistory(this._hass, {
+      entityId,
+      hours: c.hours_to_show,
+      updateInterval: c.update_interval,
+      resolution: `${c.max_points}:average:hold`,
+    });
+    if (token !== this._token || !this._config) return;
+    this._fetching = false;
+    let points = res.status === "error" && this._points.length ? this._points : res.points;
+    const cur = this._hass.states?.[entityId];
+    if (cur) {
+      const t = Date.parse(cur.last_changed || cur.last_updated);
+      const last = points[points.length - 1];
+      if (Number.isFinite(t) && (!last || t > last.t)) points = points.concat([{ t, v: parseNumber(cur.state) }]);
+    }
+    this._points = points;
+    this._loaded = true;
+    this._status = res.status;
+    this._drawGraph();
+  }
+
+  _drawGraph() {
+    const c = this._config;
+    const els = this._els;
+    if (!c || !els || !c.show_graph) return;
+    let { w, h } = this._size;
+    if ((!w || !h) && typeof ResizeObserver === "undefined") {
+      w = els.chart.clientWidth;
+      h = els.chart.clientHeight;
+    }
+    const end = Date.now();
+    const start = end - c.hours_to_show * 3600e3;
+    this._drawAxis(start, end);
+    if (!w || !h) return;
+    const entity = c.entities.find((e) => e.entity === this._selected);
+    const color = entity ? this._info(entity).color : FALLBACK_COLOR;
+    const data = reduceSeries(this._points, { start, end, buckets: c.max_points, aggregation: "average", fill: "hold" });
+    const svg = renderGraphSVG({
+      data,
+      width: w,
+      height: h,
+      type: "smooth-area",
+      color,
+      baseline: "bottom",
+      headroom: 0.3,
+      lineWidth: 2,
+      fillOpacity: 0.3,
+      idPrefix: this._uid,
+    });
+    if (svg !== this._lastSvg) {
+      els.graph.innerHTML = svg;
+      this._lastSvg = svg;
+    }
+    const hasData = Boolean(svg);
+    els.empty.classList.toggle("hidden", hasData || !this._loaded);
+    els.empty.textContent = this._status === "error" ? "Verlauf nicht verfügbar" : "Keine Daten im Zeitraum";
+  }
+
+  _drawAxis(start, end) {
+    const els = this._els;
+    if (!this._config.show_axis) return;
+    const language = getLanguage(this._hass);
+    const multiDay = end - start > 48 * 3600e3;
+    const fmt = new Intl.DateTimeFormat(language || undefined, multiDay ? { day: "2-digit", month: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+    const ticks = timeTicks(start, end, (this._size.w || 600) < 420 ? 4 : 6);
+    const key = ticks.map((t) => fmt.format(t)).join("|") + (this._size.w || 0);
+    if (key === this._axisKey) return;
+    this._axisKey = key;
+    els.axis.replaceChildren();
+    for (const t of ticks) {
+      const pos = ((t - start) / (end - start)) * 100;
+      if (pos > 96) continue; // a label at the very right edge would be cut off
+      const span = el("span", pos < 4 ? "first" : "");
+      span.style.left = `${pos}%`;
+      span.textContent = fmt.format(t);
+      els.axis.append(span);
+    }
+  }
+}
+
+function formatHours(h) {
+  if (h % 24 === 0 && h >= 48) return `${h / 24} Tage`;
+  if (h === 24) return "24 Stunden";
+  return h === 1 ? "Stunde" : `${formatNumber(h, { decimals: h % 1 ? 1 : 0, locale: "de" })} Stunden`;
+}
+
+// ------------------------------------------------------------ editor
+
+const LABELS = {
+  title: "Titel",
+  entities: "Sensoren",
+  graph_entity: "Graph zu Beginn (Sensor)",
+  hours_to_show: "Zeitraum (Stunden)",
+  show_rating: "Gesamtbewertung anzeigen",
+  show_graph: "Verlauf anzeigen",
+};
+
+/** Editor data ↔ config: entities may be objects in YAML – keep them. */
+function overviewToForm(config) {
+  const c = config || {};
+  return {
+    title: c.title ?? "Luftqualität",
+    entities: (Array.isArray(c.entities) ? c.entities : []).map((e) => (typeof e === "string" ? e : e?.entity)).filter(Boolean),
+    graph_entity: c.graph_entity,
+    hours_to_show: c.hours_to_show ?? 24,
+    show_rating: c.show_rating !== false,
+    show_graph: c.show_graph !== false,
+  };
+}
+
+function overviewFromForm(config, form) {
+  const out = { ...(config || {}) };
+  const d = form || {};
+  const old = Array.isArray(out.entities) ? out.entities : [];
+  out.entities = (d.entities || []).map((id) => old.find((e) => (typeof e === "string" ? e : e?.entity) === id) ?? id);
+  if (typeof d.title === "string") out.title = d.title;
+  if (d.graph_entity && d.entities?.includes(d.graph_entity)) out.graph_entity = d.graph_entity;
+  else delete out.graph_entity;
+  if (typeof d.hours_to_show === "number" && d.hours_to_show !== 24) out.hours_to_show = d.hours_to_show;
+  else delete out.hours_to_show;
+  for (const k of ["show_rating", "show_graph"]) {
+    if (d[k] === false) out[k] = false;
+    else delete out[k];
+  }
+  return out;
+}
+
+class SmartGraphOverviewCardEditor extends Base {
+  setConfig(config) {
+    this._config = config;
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this._form) this._form.hass = hass;
+  }
+
+  _render() {
+    if (!customElements.get("ha-form")) {
+      this.textContent = "Der visuelle Editor ist nicht verfügbar. Bitte den YAML-Modus verwenden.";
+      return;
+    }
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (s) => LABELS[s.name] ?? s.name;
+      this._form.addEventListener("value-changed", (ev) => {
+        const next = overviewFromForm(this._config, ev.detail.value);
+        this._config = next;
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
+      });
+      this.append(this._form);
+    }
+    this._form.hass = this._hass;
+    this._form.schema = [
+      { name: "title", selector: { text: {} } },
+      { name: "entities", selector: { entity: { multiple: true, filter: { domain: "sensor" } } } },
+      { name: "graph_entity", selector: { entity: { include_entities: overviewToForm(this._config).entities } } },
+      { name: "hours_to_show", selector: { number: { min: 1, max: 168, mode: "box" } } },
+      {
+        type: "grid",
+        name: "",
+        schema: [
+          { name: "show_rating", selector: { boolean: {} } },
+          { name: "show_graph", selector: { boolean: {} } },
+        ],
+      },
+    ];
+    this._form.data = overviewToForm(this._config);
+  }
+}
+
+function registerOverviewCard() {
+  if (typeof customElements === "undefined" || customElements.get(OVERVIEW_TAG)) return;
+  customElements.define(OVERVIEW_TAG, SmartGraphOverviewCard);
+  if (!customElements.get(OVERVIEW_EDITOR_TAG)) customElements.define(OVERVIEW_EDITOR_TAG, SmartGraphOverviewCardEditor);
+  window.customCards = window.customCards || [];
+  window.customCards.push({
+    type: OVERVIEW_TAG,
+    name: "Smart Graph Overview Card",
+    description: "Mehrere Sensoren in einer Karte (z. B. Luftqualität): Gesamtbewertung, alle Werte und ein umschaltbarer Verlaufsgraph.",
+    preview: true,
+    documentationURL: "https://github.com/rest2178/smart-graph-button-card",
+  });
+}
+return { OVERVIEW_TAG, OVERVIEW_EDITOR_TAG, OverviewConfigError, validateOverviewConfig, timeTicks, SmartGraphOverviewCard, overviewToForm, overviewFromForm, SmartGraphOverviewCardEditor, registerOverviewCard };
+})();
+
 // ---- src/contrast.js
 const __m_contrast_js = (() => {
 /**
@@ -4139,11 +5118,13 @@ const { renderGraphSVG } = __m_graph_renderer_js;
 const { GestureRecognizer, bindActionHandler, handleAction, hasAction } = __m_action_handler_js;
 const { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx, paddingSide } = __m_utils_js;
 const { EDITOR_TAG } = __m_smart_graph_button_card_editor_js;
+const { registerOverviewCard } = __m_overview_card_js;
+const { resolveLevels, findLevel, ringFraction, TYPE_COLORS, TYPE_ICONS } = __m_levels_js;
 const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = __m_contrast_js;
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.8.0";
+const CARD_VERSION = "1.9.0";
 
 let instanceCounter = 0;
 
@@ -4507,7 +5488,7 @@ class SmartGraphButtonCard extends HTMLElement {
 
     const card = el("ha-card", `sgbc design-${c.design || "standard"}${c.design_size === "double" ? " design-double" : ""}`, { tabindex: "0", role: "button" });
     // a value counts as configured when the user or the chosen design sets it
-    const configured = (path) => userSet(raw, path) || (c.design && c.design !== "standard" && userSet(designDefaults(c.design, c.design_size), path));
+    const configured = (path) => userSet(raw, path) || (c.design && c.design !== "standard" && userSet(designDefaults(c.design, c.design_size, c.variant === "info"), path));
     const stateBg = el("div", "layer state-bg");
     // "after-icon" without an icon area is the same as "full"
     const graphPos = c.graph.position === "after-icon" && !c.icon_area.enabled ? "full" : c.graph.position;
@@ -4570,7 +5551,59 @@ class SmartGraphButtonCard extends HTMLElement {
     sep.textContent = c.values.separator;
     const v2 = makeValue(2);
     values.append(v1.wrap, sep, v2.wrap);
-    if (isInfo) {
+    const infoDesign = isInfo && c.design && c.design !== "standard";
+    // status line ("● Optimal") of the info designs
+    const status = el("div", "status hidden");
+    const statusDot = el("span", "status-dot-mark");
+    const statusIcon = el("ha-icon", "status-icon hidden", { "aria-hidden": "true" });
+    const statusLabel = el("span", "status-label");
+    status.append(statusDot, statusIcon, statusLabel);
+    let ring = null;
+    if (infoDesign) {
+      card.classList.add("variant-info");
+      content.classList.add("idesign", `idesign-${c.design}`);
+      const titles = el("div", "i-titles");
+      if (c.design === "ring" && iconWrap) {
+        // status ring around the icon: track + arc (stroke-dasharray)
+        const ns = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(ns, "svg");
+        svg.setAttribute("viewBox", "0 0 100 100");
+        svg.setAttribute("class", "ring");
+        svg.setAttribute("aria-hidden", "true");
+        const track = document.createElementNS(ns, "circle");
+        const arc = document.createElementNS(ns, "circle");
+        for (const [node, cls] of [[track, "ring-track"], [arc, "ring-arc"]]) {
+          node.setAttribute("cx", "50");
+          node.setAttribute("cy", "50");
+          node.setAttribute("r", "45");
+          node.setAttribute("pathLength", "100");
+          node.setAttribute("class", cls);
+        }
+        arc.setAttribute("stroke-dasharray", "0 100");
+        svg.append(track, arc);
+        iconWrap.prepend(svg);
+        ring = { svg, arc };
+      }
+      if (c.design === "tile") {
+        const top = el("div", "i-top");
+        titles.append(name, status);
+        if (iconWrap) top.append(iconWrap);
+        top.append(titles);
+        content.append(top, values);
+      } else if (c.design === "ring") {
+        const row = el("div", "i-row");
+        titles.append(name, values, status);
+        if (iconWrap) row.append(iconWrap);
+        row.append(titles);
+        content.append(row);
+      } else {
+        // compact: centered column
+        if (iconWrap) content.append(iconWrap);
+        content.append(name, values, status);
+      }
+      content.append(info); // empty, keeps the element references valid
+      info.classList.add("hidden");
+    } else if (isInfo) {
       // info layout: [icon name] on top, large value below
       const head = el("div", "info-head");
       const iconInHead = Boolean(iconWrap) && (c.icon_position === "name-left" || c.icon_position === "name-right");
@@ -4697,7 +5730,8 @@ class SmartGraphButtonCard extends HTMLElement {
     card.addEventListener("transitionend", (ev) => ev.target === card && recheck());
     const probe = el("span", "probe", { "aria-hidden": "true" });
     content.append(probe);
-    this._els = { card, stateBg, graph, divider, overlay, content, iconWrap, iconArea, iconGraph, glyph, badge, name, values, v1, v2, sep, hero, probe };
+    this._els = { card, stateBg, graph, divider, overlay, content, iconWrap, iconArea, iconGraph, glyph, badge, name, values, v1, v2, sep, hero, probe, status, statusDot, statusIcon, statusLabel, ring };
+    this._levelsFor = undefined;
     this._graphSize = { w: 0, h: 0 };
     this._lastSvg = null;
     this._glyphKey = null;
@@ -4775,7 +5809,39 @@ class SmartGraphButtonCard extends HTMLElement {
     if (customClass) card.classList.add(`custom-${customClass}`);
 
     // colors
-    setVar("--sgbc-accent", resolveColor(c.accent_color, group, customClass));
+    // status level (info designs) and accent color
+    const deviceClass = mainObj?.attributes?.device_class;
+    let level = null;
+    if (c.levels) {
+      if (this._levelsFor !== deviceClass) {
+        this._levels = resolveLevels(c.levels, deviceClass);
+        this._levelsFor = deviceClass;
+      }
+      level = group === "unavailable" ? null : findLevel(mainObj?.state, this._levels);
+    }
+    let accent = resolveColor(c.accent_color, group, customClass);
+    if (accent === "level") accent = level?.color || TYPE_COLORS[deviceClass] || "auto";
+    if (accent === "auto") accent = TYPE_COLORS[deviceClass] || AUTO_COLORS[deviceClass] || "var(--primary-color, #03a9f4)";
+    if (group === "unavailable" && c.variant === "info" && c.design !== "standard") accent = "var(--disabled-text-color, #6b7280)";
+    setVar("--sgbc-accent", accent);
+    if (els.status) {
+      els.status.classList.toggle("hidden", !level || !level.label);
+      if (level) {
+        if (els.statusLabel.textContent !== level.label) els.statusLabel.textContent = level.label;
+        setVar("--sgbc-level-color", level.color);
+        const ic = level.icon || "";
+        els.statusIcon.classList.toggle("hidden", !ic);
+        els.statusDot.classList.toggle("hidden", Boolean(ic));
+        if (ic && els.statusIcon.icon !== ic) {
+          els.statusIcon.icon = ic;
+          els.statusIcon.setAttribute("icon", ic);
+        }
+      }
+    }
+    if (els.ring) {
+      const f = group === "unavailable" ? 0 : ringFraction(mainObj?.state, deviceClass, c.ring ? [c.ring.min, c.ring.max] : null);
+      els.ring.arc.setAttribute("stroke-dasharray", `${Math.round(f * 1000) / 10} 100`);
+    }
     setVar("--sgbc-icon-color", override("icon") ?? resolveColor(c.icon_area.color, group, customClass));
     const ib = override("icon-background");
     setVar("--sgbc-icon-background", ib ? mix(ib, 18) : resolveColor(c.icon_area.background, group, customClass));
@@ -4912,6 +5978,7 @@ class SmartGraphButtonCard extends HTMLElement {
     if (picture && !this._failedPictures.has(picture)) mode = "picture";
     else if (iconCfg === "none") mode = "none";
     else if (iconCfg) mode = "icon";
+    else if (c.variant === "info" && c.design !== "standard" && TYPE_ICONS[mainObj?.attributes?.device_class] && !mainObj?.attributes?.icon) mode = "icon";
     else if (mainObj && customElements.get("ha-state-icon")) mode = "state-icon";
     else mode = "icon";
 
@@ -4942,7 +6009,8 @@ class SmartGraphButtonCard extends HTMLElement {
       if (node.getAttribute("src") !== picture) node.setAttribute("src", picture);
     } else if (mode === "icon") {
       const domain = c.entity.split(".")[0];
-      const icon = iconCfg || mainObj?.attributes?.icon || DOMAIN_ICONS[domain] || "mdi:bookmark";
+      const typeIcon = c.variant === "info" && c.design !== "standard" ? TYPE_ICONS[mainObj?.attributes?.device_class] : null;
+      const icon = iconCfg || mainObj?.attributes?.icon || typeIcon || DOMAIN_ICONS[domain] || "mdi:bookmark";
       if (node.icon !== icon) {
         node.icon = icon;
         node.setAttribute("icon", icon);
@@ -5138,6 +6206,7 @@ class SmartGraphButtonCard extends HTMLElement {
     if (!c || !els || typeof getComputedStyle === "undefined") return;
     const targets = [els.name, els.v1.wrap, els.v1.unit, els.sep, els.v2.wrap, els.v2.unit];
     if (els.hero) targets.push(els.hero.value, els.hero.caption);
+    if (els.statusLabel) targets.push(els.statusLabel);
     if (c.text_contrast === "off") {
       for (const t of targets) t.style.removeProperty("color");
       els.card.classList.remove("text-halo");
@@ -5281,6 +6350,7 @@ if (!customElements.get(CARD_TAG)) {
     preview: true,
     documentationURL: "https://github.com/rest2178/smart-graph-button-card",
   });
+  registerOverviewCard();
   // eslint-disable-next-line no-console
   console.info(`%c SMART-GRAPH-BUTTON-CARD %c v${CARD_VERSION} `, "color:#fff;background:#0ea5e9;font-weight:700;border-radius:3px 0 0 3px", "color:#0ea5e9;background:#e0f2fe;border-radius:0 3px 3px 0");
 }
