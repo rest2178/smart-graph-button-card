@@ -191,3 +191,17 @@ test("designs: user values win, hero false, invalid design", () => {
   // sensor only: no duplicate second value
   assert.equal(validateConfig({ type: "x", entity: "sensor.p", design: "subtle" }).value_2, undefined);
 });
+
+test("designs: normal height by default, double on request", () => {
+  const base = { type: "x", entity: "switch.desk", design: "subtle", graph: { entity: "sensor.p" } };
+  const normal = validateConfig(base);
+  assert.equal(normal.design_size, "normal");
+  assert.equal(normal.layout.height, "64px");
+  assert.equal(normal.icon_area.size, "42px");
+  const double = validateConfig({ ...base, design_size: "double" });
+  assert.equal(double.layout.height, "128px");
+  assert.equal(double.icon_area.size, "50px");
+  assert.equal(double.name_style.font_size, "16px");
+  assert.equal(validateConfig({ ...base, design_size: "double", layout: { height: "110px" } }).layout.height, "110px");
+  assert.throws(() => validateConfig({ ...base, design_size: "huge" }));
+});

@@ -6,7 +6,7 @@
  */
 
 import { CARD_STYLES } from "./styles.js";
-import { validateConfig, ConfigError, DESIGN_DEFAULTS } from "./config-validator.js";
+import { validateConfig, ConfigError, designDefaults } from "./config-validator.js";
 import { getStateGroup, matchCustomState, normalizeThresholdRanges, findThresholdColor, resolveColor } from "./state-resolver.js";
 import { resolveValue, isTemplate, formatNumber, getNumberLocale } from "./value-formatter.js";
 import { fetchHistory } from "./history-provider.js";
@@ -19,7 +19,7 @@ import { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } f
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.7.0";
+export const CARD_VERSION = "1.8.0";
 
 let instanceCounter = 0;
 
@@ -381,9 +381,9 @@ export class SmartGraphButtonCard extends HTMLElement {
     const style = el("style");
     style.textContent = CARD_STYLES;
 
-    const card = el("ha-card", `sgbc design-${c.design || "standard"}`, { tabindex: "0", role: "button" });
+    const card = el("ha-card", `sgbc design-${c.design || "standard"}${c.design_size === "double" ? " design-double" : ""}`, { tabindex: "0", role: "button" });
     // a value counts as configured when the user or the chosen design sets it
-    const configured = (path) => userSet(raw, path) || (c.design && c.design !== "standard" && userSet(DESIGN_DEFAULTS[c.design], path));
+    const configured = (path) => userSet(raw, path) || (c.design && c.design !== "standard" && userSet(designDefaults(c.design, c.design_size), path));
     const stateBg = el("div", "layer state-bg");
     // "after-icon" without an icon area is the same as "full"
     const graphPos = c.graph.position === "after-icon" && !c.icon_area.enabled ? "full" : c.graph.position;

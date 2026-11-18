@@ -160,3 +160,16 @@ test("design: hero off, caption and tint off are stored", () => {
   const off = formToConfig(out, { ...configToForm(out), hero_enabled: false });
   assert.equal(off.hero, false);
 });
+
+test("design: double height toggle", () => {
+  const cfg = { type: "custom:smart-graph-button-card", entity: "switch.desk", design: "split", layout: { height: "70px" } };
+  const form = configToForm(cfg);
+  assert.equal(form.design_double, false);
+  const out = formToConfig(cfg, { ...form, design_double: true });
+  assert.equal(out.design_size, "double");
+  assert.equal(out.layout, undefined);
+  const back = formToConfig(out, { ...configToForm(out), design_double: false });
+  assert.equal(back.design_size, undefined);
+  const std = formToConfig(out, { ...configToForm(out), design: "standard" });
+  assert.equal(std.design_size, undefined);
+});

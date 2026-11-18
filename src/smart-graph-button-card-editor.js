@@ -106,6 +106,7 @@ const LABELS = {
   entity: "Entity",
   variant: "Darstellung",
   design: "Design",
+  design_double: "Doppelte Höhe (2 × Button-Höhe)",
   hero_enabled: "Großen Wert rechts anzeigen",
   hero_caption: "Beschriftung unter dem großen Wert",
   name: "Name",
@@ -165,6 +166,7 @@ function mainSchema(cfg) {
       ? []
       : [
           { name: "design", selector: { select: { mode: "dropdown", options: options(DESIGNS) } } },
+          ...(isDesign(cfg) ? [{ name: "design_double", selector: { boolean: {} } }] : []),
           {
             type: "grid",
             name: "",
@@ -326,6 +328,7 @@ export function configToForm(config) {
     name: typeof c.name === "string" ? c.name : undefined,
     icon: typeof c.icon === "string" ? c.icon : undefined,
     design: designOf(c),
+    design_double: c.design_size === "double",
     hero_enabled: heroOn(c),
     hero_caption: c.hero && typeof c.hero === "object" && c.hero.caption !== undefined ? String(c.hero.caption ?? "") : undefined,
     value_1_enabled: c.value_1 === undefined ? isDesign(c) : Boolean(c.value_1),
@@ -387,10 +390,21 @@ export function formToConfig(config, form) {
       setPath(out, path, undefined);
       pruneEmpty(out, path);
     }
+    if (d.design === "standard") delete out.design_size;
     if (out.hero === false) delete out.hero;
     for (const key of ["value_1", "value_2"]) if (out[key] === false) delete out[key];
     if (d.design === "standard" && out.graph && !out.graph.entity) delete out.graph;
     return out;
+  }
+  if (d.design_double !== undefined && isDesign(out)) {
+    const was = config?.design_size === "double";
+    if (d.design_double !== was) {
+      // the size brings its own height – a height from the other size would not fit
+      setPath(out, "layout.height", undefined);
+      pruneEmpty(out, "layout.height");
+    }
+    if (d.design_double) out.design_size = "double";
+    else delete out.design_size;
   }
   if (d.hero_enabled !== undefined && !isInfoConfig(out)) {
     const byDesign = HERO_DESIGNS.includes(designOf(out));

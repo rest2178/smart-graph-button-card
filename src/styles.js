@@ -274,9 +274,9 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 .info-layout .value-2 { font-size: var(--sgbc-value-2-size, var(--sgbc-values-size, 12px)); }
 
 /* ---- large value on the right (hero) */
+ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge, ha-card.sgbc.design-sparkline { container-type: inline-size; }
 .content.has-hero { grid-template-columns: auto minmax(0, 1fr) auto; }
 .content.has-hero.no-icon { grid-template-columns: minmax(0, 1fr) auto; }
-ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge, ha-card.sgbc.design-sparkline { container-type: inline-size; }
 .hero {
   max-width: 48cqi;
   display: flex;
@@ -289,7 +289,7 @@ ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge
 }
 .hero.hidden, .hero-caption.hidden { display: none; }
 .hero-value {
-  font-size: var(--sgbc-hero-size, clamp(17px, 6.4cqi, 28px));
+  font-size: var(--sgbc-hero-size, clamp(15px, 5.2cqi, 21px));
   font-weight: 700;
   max-width: 100%;
   overflow: hidden;
@@ -298,74 +298,99 @@ ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge
   white-space: nowrap;
   color: var(--sgbc-hero-color, var(--sgbc-accent, var(--primary-color)));
 }
-.hero-caption { margin-top: 2px; font-size: 13px; color: var(--secondary-text-color); white-space: nowrap; }
+.hero-caption { margin-top: 1px; font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; }
 .hero.hero-badge {
   align-items: center;
-  padding: 7px clamp(10px, 3.4cqi, 16px) 6px;
-  border-radius: 12px;
+  padding: 4px clamp(8px, 2.8cqi, 12px) 3px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--sgbc-hero-color, var(--sgbc-accent, var(--primary-color))) 68%, #000);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--sgbc-accent, #000) 25%, transparent);
 }
-.hero.hero-badge .hero-value { color: #fff; font-size: var(--sgbc-hero-size, clamp(16px, 5.4cqi, 24px)); }
-.hero.hero-badge .hero-caption { color: rgba(255, 255, 255, 0.92); margin-top: 1px; }
+.hero.hero-badge .hero-value { color: #fff; font-size: var(--sgbc-hero-size, clamp(14px, 4.6cqi, 18px)); }
+.hero.hero-badge .hero-caption { color: rgba(255, 255, 255, 0.92); margin-top: 0; }
+/* double height: larger value */
+ha-card.sgbc.design-double .hero-value { font-size: var(--sgbc-hero-size, clamp(17px, 6.4cqi, 28px)); }
+ha-card.sgbc.design-double .hero-caption { margin-top: 2px; font-size: 13px; }
+ha-card.sgbc.design-double .hero.hero-badge { padding: 7px clamp(10px, 3.4cqi, 16px) 6px; border-radius: 12px; }
+ha-card.sgbc.design-double .hero.hero-badge .hero-value { font-size: var(--sgbc-hero-size, clamp(16px, 5.4cqi, 24px)); }
+ha-card.sgbc.design-double .hero.hero-badge .hero-caption { margin-top: 1px; }
 
 /* ---- status dot in front of the first value ("● Ein") */
 .values.status-dot .value-1::before {
   content: "";
   flex: none;
-  width: 8px;
-  height: 8px;
-  margin-right: 3px;
+  width: 7px;
+  height: 7px;
+  margin-right: 2px;
   border-radius: 50%;
   background: var(--sgbc-accent, var(--primary-color));
 }
+ha-card.sgbc.design-double .values.status-dot .value-1::before { width: 8px; height: 8px; margin-right: 3px; }
+/* status line: the state ("● Aus") keeps its width, the second value gives way */
+.values.status-dot .value-1 { flex-shrink: 0; }
+.values.status-dot .value-2 { flex-shrink: 1; min-width: 0; }
+.values.status-dot.stacked .value { max-width: 100%; }
 
-/* ---- designs: content in the upper part, graph below / beside it */
+/* ---- designs */
 .divider { display: none; z-index: 3; }
-ha-card.sgbc.design-subtle .content,
-ha-card.sgbc.design-badge .content,
-ha-card.sgbc.design-split .content {
-  height: var(--sgbc-content-height, 72px);
-  align-items: center;
-}
-ha-card.sgbc.design-subtle .info, ha-card.sgbc.design-badge .info, ha-card.sgbc.design-split .info, ha-card.sgbc.design-sparkline .info { gap: 4px; }
+ha-card.sgbc.design-subtle .info, ha-card.sgbc.design-badge .info, ha-card.sgbc.design-split .info { gap: 2px; }
+/* normal height: content uses the whole card, the graph lies behind its lower half */
+/* double height: content in the upper part, graph below */
+ha-card.sgbc.design-double.design-subtle .content,
+ha-card.sgbc.design-double.design-badge .content { height: var(--sgbc-content-height, 76px); }
+ha-card.sgbc.design-double .info { gap: 4px; }
+
 /* 2: separate graph area under a thin line that starts below the name */
+ha-card.sgbc.design-split .content { height: var(--sgbc-content-height, 44px); padding-bottom: 0; }
 ha-card.sgbc.design-split .divider {
   display: block;
   inset: auto;
-  top: calc(var(--sgbc-content-height, 72px) + 2px);
-  left: calc(var(--sgbc-pad-left, 16px) + var(--sgbc-icon-area-size, 50px) + var(--sgbc-gap, 14px));
-  right: 16px;
+  top: calc(var(--sgbc-content-height, 44px) + 1px);
+  left: calc(var(--sgbc-pad-left, 12px) + var(--sgbc-icon-area-size, 42px) + var(--sgbc-gap, 10px));
+  right: 12px;
   height: 1px;
   border-radius: 0;
   background: var(--divider-color, rgba(127, 127, 127, 0.25));
 }
-ha-card.sgbc.design-split.no-icon .divider { left: var(--sgbc-pad-left, 16px); }
-ha-card.sgbc.design-split .graph.pos-bottom { top: calc(var(--sgbc-content-height, 72px) + 8px); height: auto; }
-/* 4: content left, thin vertical line, sparkline on the right */
-ha-card.sgbc.design-sparkline .content { padding-right: calc(var(--sgbc-graph-width, 34%) + 44px); }
-ha-card.sgbc.design-sparkline .graph.pos-right {
-  top: 18px;
-  bottom: 18px;
+ha-card.sgbc.design-split.no-icon .divider { left: var(--sgbc-pad-left, 12px); }
+ha-card.sgbc.design-split .graph.pos-bottom { top: calc(var(--sgbc-content-height, 44px) + 3px); height: auto; }
+/* in the flat split layout the icon sits a bit higher, aligned with name + status */
+ha-card.sgbc.design-split:not(.design-double) .icon-area { width: min(var(--sgbc-icon-area-size, 42px), 34px); height: min(var(--sgbc-icon-area-size, 42px), 34px); }
+ha-card.sgbc.design-split:not(.design-double) .divider { left: calc(var(--sgbc-pad-left, 12px) + min(var(--sgbc-icon-area-size, 42px), 34px) + var(--sgbc-gap, 10px)); }
+ha-card.sgbc.design-split:not(.design-double) .hero-caption { display: none; }
+ha-card.sgbc.design-double.design-split .content { height: var(--sgbc-content-height, 80px); padding-bottom: var(--sgbc-pad-bottom, 12px); }
+ha-card.sgbc.design-double.design-split .divider {
+  top: calc(var(--sgbc-content-height, 80px) + 2px);
+  left: calc(var(--sgbc-pad-left, 16px) + var(--sgbc-icon-area-size, 50px) + var(--sgbc-gap, 14px));
   right: 16px;
+}
+ha-card.sgbc.design-double.design-split .graph.pos-bottom { top: calc(var(--sgbc-content-height, 80px) + 8px); }
+
+/* 4: content left, thin vertical line, sparkline on the right */
+ha-card.sgbc.design-sparkline .content { padding-right: calc(var(--sgbc-graph-width, 34%) + 32px); }
+ha-card.sgbc.design-sparkline .info { gap: 1px; }
+ha-card.sgbc.design-sparkline .graph.pos-right {
+  top: 10px;
+  bottom: 10px;
+  right: 12px;
   width: var(--sgbc-graph-width, 34%);
   border-radius: 0;
 }
 ha-card.sgbc.design-sparkline .divider {
   display: block;
   inset: auto;
-  top: 16px;
-  bottom: 16px;
-  right: calc(var(--sgbc-graph-width, 34%) + 30px);
+  top: 10px;
+  bottom: 10px;
+  right: calc(var(--sgbc-graph-width, 34%) + 22px);
   width: 1px;
   border-radius: 0;
   background: var(--divider-color, rgba(127, 127, 127, 0.25));
 }
-ha-card.sgbc.design-sparkline .values.stacked { gap: var(--sgbc-values-gap, 2px); }
-/* status line: the state ("● Aus") keeps its width, the second value gives way */
-.values.status-dot .value-1 { flex-shrink: 0; }
-.values.status-dot .value-2 { flex-shrink: 1; min-width: 0; }
-.values.status-dot.stacked .value { max-width: 100%; }
+ha-card.sgbc.design-sparkline .values.stacked { gap: var(--sgbc-values-gap, 0px); line-height: 1.25; }
+ha-card.sgbc.design-double.design-sparkline .content { padding-right: calc(var(--sgbc-graph-width, 34%) + 44px); }
+ha-card.sgbc.design-double.design-sparkline .info { gap: 4px; }
+ha-card.sgbc.design-double.design-sparkline .graph.pos-right { top: 18px; bottom: 18px; right: 16px; }
+ha-card.sgbc.design-double.design-sparkline .divider { top: 16px; bottom: 16px; right: calc(var(--sgbc-graph-width, 34%) + 30px); }
 .probe { display: none; }
 /* readable text over a graph: soft halo in the card background color */
 ha-card.sgbc.text-halo .name,

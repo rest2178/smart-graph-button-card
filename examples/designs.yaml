@@ -1,6 +1,7 @@
 # Example 7 – the four ready-made designs for a switch with a power sensor.
 # The switch is the main entity (tap toggles it), the power sensor feeds
 # the graph, the second value and the large value on the right.
+# All designs use the normal button height; design_size: double doubles it.
 type: grid
 columns: 2
 square: false
@@ -26,10 +27,11 @@ cards:
     design: badge
     graph:
       entity: sensor.schreibtisch_1_leistung
-  # 4 – minimalistic with a sparkline on the right
+  # 4 – minimalistic with a sparkline on the right, twice the button height
   - type: custom:smart-graph-button-card
     entity: switch.schreibtisch_1
     icon: mdi:desk
     design: sparkline
+    design_size: double
     graph:
       entity: sensor.schreibtisch_1_leistung

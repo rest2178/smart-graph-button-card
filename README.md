@@ -189,6 +189,7 @@ type: custom:smart-graph-button-card
 entity: switch.schreibtisch_1
 icon: mdi:desk
 design: subtle            # standard | subtle | split | badge | sparkline
+# design_size: double     # optional: doppelt so hoch (128 px) mit größerem Symbol und Text
 graph:
   entity: sensor.schreibtisch_1_leistung
 ```
@@ -200,6 +201,8 @@ graph:
 | `badge` | **Farbiger Status:** wie `subtle`, der große Wert steht in einem farbigen Feld |
 | `sparkline` | **Minimalistisch:** links Symbol, Name, „● Ein“ und „9 W aktuell“, rechts nach einer senkrechten Linie ein kleiner Graph |
 | `standard` | bisheriges Aussehen (Standard) |
+
+Alle Designs haben die normale Button-Höhe (64 px), so passen sie zu den übrigen Karten. Mit `design_size: double` werden sie doppelt so hoch (128 px), mit größerem Symbol, größerer Schrift und mehr Platz für den Graphen. Im Editor heißt der Schalter „Doppelte Höhe“. In der normalen Höhe liegt der Graph bei `split` in einem schmalen Streifen unter der Linie, und die Beschriftung „aktuell“ entfällt dort aus Platzgründen.
 
 Ein Design setzt nur Standardwerte. Alles lässt sich wie gewohnt überschreiben, z. B. `layout.height`, `graph.type`, `value_2` oder `name_style`. Im Editor steht die Auswahl unter „Design“. Beim Wechsel des Designs werden Graph-Typ, Position und Höhe auf die Werte des neuen Designs zurückgesetzt.
 
@@ -262,6 +265,7 @@ Alle Optionen sind optional, außer `entity`. CSS-Längen dürfen als Zahl (wird
 | `unknown_text` | string | natives HA-Format | Text für `unknown` |
 | `show_name` | bool | `true` | Name anzeigen (`false` blendet ihn aus, z. B. bei der Info-Karte) |
 | `design` | `standard` \| `subtle` \| `split` \| `badge` \| `sparkline` | `standard` | Fertiges Design (siehe [Designs](#designs)) |
+| `design_size` | `normal` \| `double` | `normal` | Höhe der Designs: normale Button-Höhe oder doppelt so hoch |
 | `hero` | object \| `false` | je Design | Großer Wert rechts mit Beschriftung |
 | `accent_color` | Farbe oder Zuordnung | `on: #22c55e` | Statuspunkt, großer Wert, Design-Graph |
 | `text_contrast` | `auto` \| `off` | `auto` | Schriftfarben automatisch lesbar halten (siehe [Lesbarkeit](#lesbarkeit-im-hell--und-dunkelmodus)) |
@@ -666,7 +670,7 @@ Vollständige Beispiele liegen in [`examples/`](examples/):
 Im Karteneditor stehen zur Verfügung:
 
 - **Entity, Name, Symbol** sowie **Werte** (Wert 1 und Wert 2)
-- **Design:** Auswahl der vier Designs, großer Wert an/aus und seine Beschriftung; Akzentfarben unter „Farben & Hintergrund“
+- **Design:** Auswahl der vier Designs, „Doppelte Höhe“, großer Wert an/aus und seine Beschriftung; Akzentfarben unter „Farben & Hintergrund“
 - **Graph:** aktivieren, Entity, Typ, Position, Zeitraum, weicher Übergang am Beginn und am Ende (Schieberegler)
 - **Graph-Farben:** Farbmodus wählen. Je nach Modus erscheinen eine feste Farbe, Farben für Ein/Aus, Verlauf von/bis, Farben über/unter null oder die **Grenzwertliste**: Zeilen mit „Ab Wert“ und Farbe, beliebig viele über „Grenzwert hinzufügen“, Entfernen mit ✕. Beim ersten Wechsel auf „Nach Grenzwerten“ ist die Liste mit 10/50/100/200 vorbelegt.
 - **Farben & Hintergrund:** Symbolfarben und Statushintergrund für Ein/Aus, Schriftfarben für Name, beide Werte, Wert 1 und Wert 2, Schalter für automatisch lesbare Schrift

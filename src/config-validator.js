@@ -235,17 +235,14 @@ export const INFO_DEFAULTS = Object.freeze({
  * User values always win over these.
  */
 const DESIGN_BASE = {
-  icon_area: { size: "50px", icon_size: "28px" },
-  name_style: { font_size: "16px", font_weight: 600 },
-  values: { font_size: "13px", status_dot: true },
-  layout: { padding: "12px 16px", gap: "14px", border_radius: "16px" },
+  values: { status_dot: true },
   graph: {
     type: "smooth-area",
     position: "bottom",
     baseline: "bottom",
     color_mode: "fixed",
     color: "var(--sgbc-accent)",
-    line_width: 1.75,
+    line_width: 1.5,
     fill_opacity: 0.22,
     opacity: 1,
     max_points: 40,
@@ -258,27 +255,46 @@ const ACCENT_TINT = {
   unavailable: "transparent",
   other: "color-mix(in srgb, var(--sgbc-accent) 9%, transparent)",
 };
+/** Designs in the normal button height (64 px). */
 export const DESIGN_DEFAULTS = Object.freeze({
   subtle: mergeDeep(DESIGN_BASE, {
-    layout: { height: "108px" },
-    graph: { height: "50%", fade_start: 4, fade_end: 4 },
+    graph: { height: "42%", fade_start: 4, fade_end: 4 },
     state_background: { enabled: true, colors: ACCENT_TINT },
   }),
   split: mergeDeep(DESIGN_BASE, {
-    layout: { height: "122px" },
-    graph: { height: "42%", fill_opacity: 0.16, headroom: 0.3 },
+    graph: { height: "30%", fill_opacity: 0.16, headroom: 0.3 },
   }),
   badge: mergeDeep(DESIGN_BASE, {
-    layout: { height: "108px" },
-    graph: { height: "50%", fade_start: 4, fade_end: 4 },
+    graph: { height: "42%", fade_start: 4, fade_end: 4 },
     state_background: { enabled: true, colors: ACCENT_TINT },
   }),
   sparkline: mergeDeep(DESIGN_BASE, {
-    layout: { height: "100px" },
-    values: { layout: "stacked", gap: "2px" },
+    values: { layout: "stacked", gap: "0px" },
     graph: { position: "right", width: "34%", fill_opacity: 0.2, max_points: 36, headroom: 0.15 },
   }),
 });
+export const DESIGN_SIZES = ["normal", "double"];
+/** design_size: double – twice the button height, larger icon and text. */
+const DESIGN_DOUBLE = {
+  icon_area: { size: "50px", icon_size: "28px" },
+  name_style: { font_size: "16px" },
+  values: { font_size: "13px" },
+  layout: { height: "128px", padding: "12px 16px", gap: "14px", border_radius: "16px" },
+  graph: { line_width: 1.75 },
+};
+const DESIGN_DOUBLE_EXTRA = {
+  subtle: { graph: { height: "50%" } },
+  badge: { graph: { height: "50%" } },
+  split: { graph: { height: "42%" } },
+  sparkline: { values: { gap: "2px" } },
+};
+
+/** Defaults a design brings along (normal or double height). */
+export function designDefaults(design, size = "normal") {
+  if (!DESIGN_DEFAULTS[design]) return {};
+  if (size !== "double") return DESIGN_DEFAULTS[design];
+  return mergeDeep(mergeDeep(DESIGN_DEFAULTS[design], DESIGN_DOUBLE), DESIGN_DOUBLE_EXTRA[design] || {});
+}
 
 const VALUE_DEFAULTS = Object.freeze({
   type: "state",
@@ -307,10 +323,13 @@ export function validateConfig(raw) {
   const design = isInfo || raw.design === undefined ? "standard" : raw.design;
   if (!DESIGNS.includes(design)) throw new ConfigError(`design „${raw.design}“ ist ungültig. Erlaubt: ${DESIGNS.join(", ")}.`);
   const isDesign = design !== "standard";
-  const base = isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : isDesign ? mergeDeep(DEFAULTS, DESIGN_DEFAULTS[design]) : DEFAULTS;
+  const designSize = raw.design_size === undefined ? "normal" : raw.design_size;
+  if (!DESIGN_SIZES.includes(designSize)) throw new ConfigError(`design_size „${raw.design_size}“ ist ungültig. Erlaubt: ${DESIGN_SIZES.join(", ")}.`);
+  const base = isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : isDesign ? mergeDeep(DEFAULTS, designDefaults(design, designSize)) : DEFAULTS;
   const c = mergeDeep(base, raw);
   c.variant = isInfo ? "info" : "button";
   c.design = design;
+  c.design_size = isDesign ? designSize : "normal";
   // entity whose measurement the designs show (power sensor next to a switch)
   const graphEntity = isPlainObject(raw.graph) && raw.graph.entity ? raw.graph.entity : raw.entity;
   const extraEntity = graphEntity && graphEntity !== raw.entity ? graphEntity : null;

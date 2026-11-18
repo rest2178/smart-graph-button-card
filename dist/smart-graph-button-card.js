@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.7.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.8.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -278,9 +278,9 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 .info-layout .value-2 { font-size: var(--sgbc-value-2-size, var(--sgbc-values-size, 12px)); }
 
 /* ---- large value on the right (hero) */
+ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge, ha-card.sgbc.design-sparkline { container-type: inline-size; }
 .content.has-hero { grid-template-columns: auto minmax(0, 1fr) auto; }
 .content.has-hero.no-icon { grid-template-columns: minmax(0, 1fr) auto; }
-ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge, ha-card.sgbc.design-sparkline { container-type: inline-size; }
 .hero {
   max-width: 48cqi;
   display: flex;
@@ -293,7 +293,7 @@ ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge
 }
 .hero.hidden, .hero-caption.hidden { display: none; }
 .hero-value {
-  font-size: var(--sgbc-hero-size, clamp(17px, 6.4cqi, 28px));
+  font-size: var(--sgbc-hero-size, clamp(15px, 5.2cqi, 21px));
   font-weight: 700;
   max-width: 100%;
   overflow: hidden;
@@ -302,74 +302,99 @@ ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge
   white-space: nowrap;
   color: var(--sgbc-hero-color, var(--sgbc-accent, var(--primary-color)));
 }
-.hero-caption { margin-top: 2px; font-size: 13px; color: var(--secondary-text-color); white-space: nowrap; }
+.hero-caption { margin-top: 1px; font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; }
 .hero.hero-badge {
   align-items: center;
-  padding: 7px clamp(10px, 3.4cqi, 16px) 6px;
-  border-radius: 12px;
+  padding: 4px clamp(8px, 2.8cqi, 12px) 3px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--sgbc-hero-color, var(--sgbc-accent, var(--primary-color))) 68%, #000);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--sgbc-accent, #000) 25%, transparent);
 }
-.hero.hero-badge .hero-value { color: #fff; font-size: var(--sgbc-hero-size, clamp(16px, 5.4cqi, 24px)); }
-.hero.hero-badge .hero-caption { color: rgba(255, 255, 255, 0.92); margin-top: 1px; }
+.hero.hero-badge .hero-value { color: #fff; font-size: var(--sgbc-hero-size, clamp(14px, 4.6cqi, 18px)); }
+.hero.hero-badge .hero-caption { color: rgba(255, 255, 255, 0.92); margin-top: 0; }
+/* double height: larger value */
+ha-card.sgbc.design-double .hero-value { font-size: var(--sgbc-hero-size, clamp(17px, 6.4cqi, 28px)); }
+ha-card.sgbc.design-double .hero-caption { margin-top: 2px; font-size: 13px; }
+ha-card.sgbc.design-double .hero.hero-badge { padding: 7px clamp(10px, 3.4cqi, 16px) 6px; border-radius: 12px; }
+ha-card.sgbc.design-double .hero.hero-badge .hero-value { font-size: var(--sgbc-hero-size, clamp(16px, 5.4cqi, 24px)); }
+ha-card.sgbc.design-double .hero.hero-badge .hero-caption { margin-top: 1px; }
 
 /* ---- status dot in front of the first value ("● Ein") */
 .values.status-dot .value-1::before {
   content: "";
   flex: none;
-  width: 8px;
-  height: 8px;
-  margin-right: 3px;
+  width: 7px;
+  height: 7px;
+  margin-right: 2px;
   border-radius: 50%;
   background: var(--sgbc-accent, var(--primary-color));
 }
+ha-card.sgbc.design-double .values.status-dot .value-1::before { width: 8px; height: 8px; margin-right: 3px; }
+/* status line: the state ("● Aus") keeps its width, the second value gives way */
+.values.status-dot .value-1 { flex-shrink: 0; }
+.values.status-dot .value-2 { flex-shrink: 1; min-width: 0; }
+.values.status-dot.stacked .value { max-width: 100%; }
 
-/* ---- designs: content in the upper part, graph below / beside it */
+/* ---- designs */
 .divider { display: none; z-index: 3; }
-ha-card.sgbc.design-subtle .content,
-ha-card.sgbc.design-badge .content,
-ha-card.sgbc.design-split .content {
-  height: var(--sgbc-content-height, 72px);
-  align-items: center;
-}
-ha-card.sgbc.design-subtle .info, ha-card.sgbc.design-badge .info, ha-card.sgbc.design-split .info, ha-card.sgbc.design-sparkline .info { gap: 4px; }
+ha-card.sgbc.design-subtle .info, ha-card.sgbc.design-badge .info, ha-card.sgbc.design-split .info { gap: 2px; }
+/* normal height: content uses the whole card, the graph lies behind its lower half */
+/* double height: content in the upper part, graph below */
+ha-card.sgbc.design-double.design-subtle .content,
+ha-card.sgbc.design-double.design-badge .content { height: var(--sgbc-content-height, 76px); }
+ha-card.sgbc.design-double .info { gap: 4px; }
+
 /* 2: separate graph area under a thin line that starts below the name */
+ha-card.sgbc.design-split .content { height: var(--sgbc-content-height, 44px); padding-bottom: 0; }
 ha-card.sgbc.design-split .divider {
   display: block;
   inset: auto;
-  top: calc(var(--sgbc-content-height, 72px) + 2px);
-  left: calc(var(--sgbc-pad-left, 16px) + var(--sgbc-icon-area-size, 50px) + var(--sgbc-gap, 14px));
-  right: 16px;
+  top: calc(var(--sgbc-content-height, 44px) + 1px);
+  left: calc(var(--sgbc-pad-left, 12px) + var(--sgbc-icon-area-size, 42px) + var(--sgbc-gap, 10px));
+  right: 12px;
   height: 1px;
   border-radius: 0;
   background: var(--divider-color, rgba(127, 127, 127, 0.25));
 }
-ha-card.sgbc.design-split.no-icon .divider { left: var(--sgbc-pad-left, 16px); }
-ha-card.sgbc.design-split .graph.pos-bottom { top: calc(var(--sgbc-content-height, 72px) + 8px); height: auto; }
-/* 4: content left, thin vertical line, sparkline on the right */
-ha-card.sgbc.design-sparkline .content { padding-right: calc(var(--sgbc-graph-width, 34%) + 44px); }
-ha-card.sgbc.design-sparkline .graph.pos-right {
-  top: 18px;
-  bottom: 18px;
+ha-card.sgbc.design-split.no-icon .divider { left: var(--sgbc-pad-left, 12px); }
+ha-card.sgbc.design-split .graph.pos-bottom { top: calc(var(--sgbc-content-height, 44px) + 3px); height: auto; }
+/* in the flat split layout the icon sits a bit higher, aligned with name + status */
+ha-card.sgbc.design-split:not(.design-double) .icon-area { width: min(var(--sgbc-icon-area-size, 42px), 34px); height: min(var(--sgbc-icon-area-size, 42px), 34px); }
+ha-card.sgbc.design-split:not(.design-double) .divider { left: calc(var(--sgbc-pad-left, 12px) + min(var(--sgbc-icon-area-size, 42px), 34px) + var(--sgbc-gap, 10px)); }
+ha-card.sgbc.design-split:not(.design-double) .hero-caption { display: none; }
+ha-card.sgbc.design-double.design-split .content { height: var(--sgbc-content-height, 80px); padding-bottom: var(--sgbc-pad-bottom, 12px); }
+ha-card.sgbc.design-double.design-split .divider {
+  top: calc(var(--sgbc-content-height, 80px) + 2px);
+  left: calc(var(--sgbc-pad-left, 16px) + var(--sgbc-icon-area-size, 50px) + var(--sgbc-gap, 14px));
   right: 16px;
+}
+ha-card.sgbc.design-double.design-split .graph.pos-bottom { top: calc(var(--sgbc-content-height, 80px) + 8px); }
+
+/* 4: content left, thin vertical line, sparkline on the right */
+ha-card.sgbc.design-sparkline .content { padding-right: calc(var(--sgbc-graph-width, 34%) + 32px); }
+ha-card.sgbc.design-sparkline .info { gap: 1px; }
+ha-card.sgbc.design-sparkline .graph.pos-right {
+  top: 10px;
+  bottom: 10px;
+  right: 12px;
   width: var(--sgbc-graph-width, 34%);
   border-radius: 0;
 }
 ha-card.sgbc.design-sparkline .divider {
   display: block;
   inset: auto;
-  top: 16px;
-  bottom: 16px;
-  right: calc(var(--sgbc-graph-width, 34%) + 30px);
+  top: 10px;
+  bottom: 10px;
+  right: calc(var(--sgbc-graph-width, 34%) + 22px);
   width: 1px;
   border-radius: 0;
   background: var(--divider-color, rgba(127, 127, 127, 0.25));
 }
-ha-card.sgbc.design-sparkline .values.stacked { gap: var(--sgbc-values-gap, 2px); }
-/* status line: the state ("● Aus") keeps its width, the second value gives way */
-.values.status-dot .value-1 { flex-shrink: 0; }
-.values.status-dot .value-2 { flex-shrink: 1; min-width: 0; }
-.values.status-dot.stacked .value { max-width: 100%; }
+ha-card.sgbc.design-sparkline .values.stacked { gap: var(--sgbc-values-gap, 0px); line-height: 1.25; }
+ha-card.sgbc.design-double.design-sparkline .content { padding-right: calc(var(--sgbc-graph-width, 34%) + 44px); }
+ha-card.sgbc.design-double.design-sparkline .info { gap: 4px; }
+ha-card.sgbc.design-double.design-sparkline .graph.pos-right { top: 18px; bottom: 18px; right: 16px; }
+ha-card.sgbc.design-double.design-sparkline .divider { top: 16px; bottom: 16px; right: calc(var(--sgbc-graph-width, 34%) + 30px); }
 .probe { display: none; }
 /* readable text over a graph: soft halo in the card background color */
 ha-card.sgbc.text-halo .name,
@@ -2444,17 +2469,14 @@ const INFO_DEFAULTS = Object.freeze({
  * User values always win over these.
  */
 const DESIGN_BASE = {
-  icon_area: { size: "50px", icon_size: "28px" },
-  name_style: { font_size: "16px", font_weight: 600 },
-  values: { font_size: "13px", status_dot: true },
-  layout: { padding: "12px 16px", gap: "14px", border_radius: "16px" },
+  values: { status_dot: true },
   graph: {
     type: "smooth-area",
     position: "bottom",
     baseline: "bottom",
     color_mode: "fixed",
     color: "var(--sgbc-accent)",
-    line_width: 1.75,
+    line_width: 1.5,
     fill_opacity: 0.22,
     opacity: 1,
     max_points: 40,
@@ -2467,27 +2489,46 @@ const ACCENT_TINT = {
   unavailable: "transparent",
   other: "color-mix(in srgb, var(--sgbc-accent) 9%, transparent)",
 };
+/** Designs in the normal button height (64 px). */
 const DESIGN_DEFAULTS = Object.freeze({
   subtle: mergeDeep(DESIGN_BASE, {
-    layout: { height: "108px" },
-    graph: { height: "50%", fade_start: 4, fade_end: 4 },
+    graph: { height: "42%", fade_start: 4, fade_end: 4 },
     state_background: { enabled: true, colors: ACCENT_TINT },
   }),
   split: mergeDeep(DESIGN_BASE, {
-    layout: { height: "122px" },
-    graph: { height: "42%", fill_opacity: 0.16, headroom: 0.3 },
+    graph: { height: "30%", fill_opacity: 0.16, headroom: 0.3 },
   }),
   badge: mergeDeep(DESIGN_BASE, {
-    layout: { height: "108px" },
-    graph: { height: "50%", fade_start: 4, fade_end: 4 },
+    graph: { height: "42%", fade_start: 4, fade_end: 4 },
     state_background: { enabled: true, colors: ACCENT_TINT },
   }),
   sparkline: mergeDeep(DESIGN_BASE, {
-    layout: { height: "100px" },
-    values: { layout: "stacked", gap: "2px" },
+    values: { layout: "stacked", gap: "0px" },
     graph: { position: "right", width: "34%", fill_opacity: 0.2, max_points: 36, headroom: 0.15 },
   }),
 });
+const DESIGN_SIZES = ["normal", "double"];
+/** design_size: double – twice the button height, larger icon and text. */
+const DESIGN_DOUBLE = {
+  icon_area: { size: "50px", icon_size: "28px" },
+  name_style: { font_size: "16px" },
+  values: { font_size: "13px" },
+  layout: { height: "128px", padding: "12px 16px", gap: "14px", border_radius: "16px" },
+  graph: { line_width: 1.75 },
+};
+const DESIGN_DOUBLE_EXTRA = {
+  subtle: { graph: { height: "50%" } },
+  badge: { graph: { height: "50%" } },
+  split: { graph: { height: "42%" } },
+  sparkline: { values: { gap: "2px" } },
+};
+
+/** Defaults a design brings along (normal or double height). */
+function designDefaults(design, size = "normal") {
+  if (!DESIGN_DEFAULTS[design]) return {};
+  if (size !== "double") return DESIGN_DEFAULTS[design];
+  return mergeDeep(mergeDeep(DESIGN_DEFAULTS[design], DESIGN_DOUBLE), DESIGN_DOUBLE_EXTRA[design] || {});
+}
 
 const VALUE_DEFAULTS = Object.freeze({
   type: "state",
@@ -2516,10 +2557,13 @@ function validateConfig(raw) {
   const design = isInfo || raw.design === undefined ? "standard" : raw.design;
   if (!DESIGNS.includes(design)) throw new ConfigError(`design „${raw.design}“ ist ungültig. Erlaubt: ${DESIGNS.join(", ")}.`);
   const isDesign = design !== "standard";
-  const base = isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : isDesign ? mergeDeep(DEFAULTS, DESIGN_DEFAULTS[design]) : DEFAULTS;
+  const designSize = raw.design_size === undefined ? "normal" : raw.design_size;
+  if (!DESIGN_SIZES.includes(designSize)) throw new ConfigError(`design_size „${raw.design_size}“ ist ungültig. Erlaubt: ${DESIGN_SIZES.join(", ")}.`);
+  const base = isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : isDesign ? mergeDeep(DEFAULTS, designDefaults(design, designSize)) : DEFAULTS;
   const c = mergeDeep(base, raw);
   c.variant = isInfo ? "info" : "button";
   c.design = design;
+  c.design_size = isDesign ? designSize : "normal";
   // entity whose measurement the designs show (power sensor next to a switch)
   const graphEntity = isPlainObject(raw.graph) && raw.graph.entity ? raw.graph.entity : raw.entity;
   const extraEntity = graphEntity && graphEntity !== raw.entity ? graphEntity : null;
@@ -2944,7 +2988,7 @@ function normalizeGraph(rawGraph, c, err) {
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }
-return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, VALUE_POSITIONS, INFO_ICON_POSITIONS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, TEXT_CONTRAST_MODES, DESIGNS, HERO_STYLES, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, DESIGN_DEFAULTS, validateConfig, fadeLength };
+return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, VALUE_POSITIONS, INFO_ICON_POSITIONS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, TEXT_CONTRAST_MODES, DESIGNS, HERO_STYLES, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, DESIGN_DEFAULTS, DESIGN_SIZES, designDefaults, validateConfig, fadeLength };
 })();
 
 // ---- src/color-utils.js
@@ -3116,6 +3160,7 @@ const LABELS = {
   entity: "Entity",
   variant: "Darstellung",
   design: "Design",
+  design_double: "Doppelte Höhe (2 × Button-Höhe)",
   hero_enabled: "Großen Wert rechts anzeigen",
   hero_caption: "Beschriftung unter dem großen Wert",
   name: "Name",
@@ -3175,6 +3220,7 @@ function mainSchema(cfg) {
       ? []
       : [
           { name: "design", selector: { select: { mode: "dropdown", options: options(DESIGNS) } } },
+          ...(isDesign(cfg) ? [{ name: "design_double", selector: { boolean: {} } }] : []),
           {
             type: "grid",
             name: "",
@@ -3336,6 +3382,7 @@ function configToForm(config) {
     name: typeof c.name === "string" ? c.name : undefined,
     icon: typeof c.icon === "string" ? c.icon : undefined,
     design: designOf(c),
+    design_double: c.design_size === "double",
     hero_enabled: heroOn(c),
     hero_caption: c.hero && typeof c.hero === "object" && c.hero.caption !== undefined ? String(c.hero.caption ?? "") : undefined,
     value_1_enabled: c.value_1 === undefined ? isDesign(c) : Boolean(c.value_1),
@@ -3397,10 +3444,21 @@ function formToConfig(config, form) {
       setPath(out, path, undefined);
       pruneEmpty(out, path);
     }
+    if (d.design === "standard") delete out.design_size;
     if (out.hero === false) delete out.hero;
     for (const key of ["value_1", "value_2"]) if (out[key] === false) delete out[key];
     if (d.design === "standard" && out.graph && !out.graph.entity) delete out.graph;
     return out;
+  }
+  if (d.design_double !== undefined && isDesign(out)) {
+    const was = config?.design_size === "double";
+    if (d.design_double !== was) {
+      // the size brings its own height – a height from the other size would not fit
+      setPath(out, "layout.height", undefined);
+      pruneEmpty(out, "layout.height");
+    }
+    if (d.design_double) out.design_size = "double";
+    else delete out.design_size;
   }
   if (d.hero_enabled !== undefined && !isInfoConfig(out)) {
     const byDesign = HERO_DESIGNS.includes(designOf(out));
@@ -4072,7 +4130,7 @@ const __m_smart_graph_button_card_js = (() => {
  * type: custom:smart-graph-button-card
  */
 const { CARD_STYLES } = __m_styles_js;
-const { validateConfig, ConfigError, DESIGN_DEFAULTS } = __m_config_validator_js;
+const { validateConfig, ConfigError, designDefaults } = __m_config_validator_js;
 const { getStateGroup, matchCustomState, normalizeThresholdRanges, findThresholdColor, resolveColor } = __m_state_resolver_js;
 const { resolveValue, isTemplate, formatNumber, getNumberLocale } = __m_value_formatter_js;
 const { fetchHistory } = __m_history_provider_js;
@@ -4085,7 +4143,7 @@ const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = 
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.7.0";
+const CARD_VERSION = "1.8.0";
 
 let instanceCounter = 0;
 
@@ -4447,9 +4505,9 @@ class SmartGraphButtonCard extends HTMLElement {
     const style = el("style");
     style.textContent = CARD_STYLES;
 
-    const card = el("ha-card", `sgbc design-${c.design || "standard"}`, { tabindex: "0", role: "button" });
+    const card = el("ha-card", `sgbc design-${c.design || "standard"}${c.design_size === "double" ? " design-double" : ""}`, { tabindex: "0", role: "button" });
     // a value counts as configured when the user or the chosen design sets it
-    const configured = (path) => userSet(raw, path) || (c.design && c.design !== "standard" && userSet(DESIGN_DEFAULTS[c.design], path));
+    const configured = (path) => userSet(raw, path) || (c.design && c.design !== "standard" && userSet(designDefaults(c.design, c.design_size), path));
     const stateBg = el("div", "layer state-bg");
     // "after-icon" without an icon area is the same as "full"
     const graphPos = c.graph.position === "after-icon" && !c.icon_area.enabled ? "full" : c.graph.position;
