@@ -65,6 +65,7 @@ Beide stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
 - Graph mit `line`, `area`, `smooth-area`, `bar`, `column`, `stepped`, `line-bar`, `smooth-line-bar` in nativem SVG
 - Graphpositionen `full`, `after-icon`, `left`, `right`, `bottom`, `icon-area`, `custom`
 - Farbmodi `fixed`, `state`, `thresholds` (beliebig viele Grenzwerte, `current` oder `per-point`), `gradient`, `sign` (über/unter null)
+- Vier fertige Designs (`design: subtle | split | badge | sparkline`) mit großem Wert rechts, Statuspunkt und Akzentfarbe
 - Statusabhängiger Kartenhintergrund, Lesbarkeits-Overlay, Ebenenreihenfolge einstellbar
 - Automatisch lesbare Schriftfarben im Hell- und Dunkelmodus (Kontrastprüfung, Farbton bleibt erhalten)
 - Eigene Zustandsregeln mit `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `regex`
@@ -179,6 +180,49 @@ Die Schriftgrößen von Name und Wert wachsen mit der Kartenbreite (maximal 24 p
 
 Mit `variant: info` lässt sich die Info-Darstellung auch für `custom:smart-graph-button-card` einschalten. Im Editor heißt das „Darstellung → Info-Karte“.
 
+## Designs
+
+Für die Button-Karte gibt es vier fertige Designs. Sie sind für einen Schalter mit Leistungsmesser gedacht: Die Haupt-Entity ist der Schalter (Tippen schaltet), der Graph zeigt den Sensor.
+
+```yaml
+type: custom:smart-graph-button-card
+entity: switch.schreibtisch_1
+icon: mdi:desk
+design: subtle            # standard | subtle | split | badge | sparkline
+graph:
+  entity: sensor.schreibtisch_1_leistung
+```
+
+| `design` | Aussehen |
+|---|---|
+| `subtle` | **Dezenter Graph im Hintergrund:** Symbol, Name, „● Ein · 9 W“, rechts groß „9 W / aktuell“. Der Graph liegt unten hinter dem Inhalt, die Karte ist im Zustand „Ein“ leicht eingefärbt |
+| `split` | **Zwei Bereiche:** oben der Inhalt mit „● Ein · seit 08:14 Uhr“ und dem großen Wert, darunter eine feine Linie und der Graph in einem eigenen Bereich |
+| `badge` | **Farbiger Status:** wie `subtle`, der große Wert steht in einem farbigen Feld |
+| `sparkline` | **Minimalistisch:** links Symbol, Name, „● Ein“ und „9 W aktuell“, rechts nach einer senkrechten Linie ein kleiner Graph |
+| `standard` | bisheriges Aussehen (Standard) |
+
+Ein Design setzt nur Standardwerte. Alles lässt sich wie gewohnt überschreiben, z. B. `layout.height`, `graph.type`, `value_2` oder `name_style`. Im Editor steht die Auswahl unter „Design“. Beim Wechsel des Designs werden Graph-Typ, Position und Höhe auf die Werte des neuen Designs zurückgesetzt.
+
+**Großer Wert (`hero`)**: zeigt standardmäßig den Zustand der Graph-Entity, darunter die Beschriftung „aktuell“. Er funktioniert auch ohne Design.
+
+```yaml
+hero:
+  caption: jetzt          # Beschriftung, "" = keine
+  style: badge            # text | badge
+  # wie value_1/value_2: entity, attribute, decimals, unit, thresholds, color, font_size …
+# hero: false             # ausblenden
+```
+
+**Akzentfarbe (`accent_color`)**: Farbe des Statuspunkts, des großen Werts, des Graphen und der Einfärbung, je Zustand:
+
+```yaml
+accent_color:
+  on: "#22c55e"
+  off: var(--secondary-text-color)
+```
+
+Der Statuspunkt vor dem ersten Wert wird mit `values.status_dot: true` eingeschaltet; bei den Designs ist er an. Mit `graph.headroom` (Anteil, Standard `0.05`, bei den Designs `0.15` bis `0.45`) bleibt über dem höchsten Wert Luft, damit der Graph nicht bis an den Text reicht.
+
 ## Minimale Konfiguration
 
 ```yaml
@@ -217,6 +261,9 @@ Alle Optionen sind optional, außer `entity`. CSS-Längen dürfen als Zahl (wird
 | `unavailable_text` | string | natives HA-Format | Text für `unavailable` |
 | `unknown_text` | string | natives HA-Format | Text für `unknown` |
 | `show_name` | bool | `true` | Name anzeigen (`false` blendet ihn aus, z. B. bei der Info-Karte) |
+| `design` | `standard` \| `subtle` \| `split` \| `badge` \| `sparkline` | `standard` | Fertiges Design (siehe [Designs](#designs)) |
+| `hero` | object \| `false` | je Design | Großer Wert rechts mit Beschriftung |
+| `accent_color` | Farbe oder Zuordnung | `on: #22c55e` | Statuspunkt, großer Wert, Design-Graph |
 | `text_contrast` | `auto` \| `off` | `auto` | Schriftfarben automatisch lesbar halten (siehe [Lesbarkeit](#lesbarkeit-im-hell--und-dunkelmodus)) |
 | `show_unavailable_badge` | bool | `true` | Warn-Badge am Symbol bei `unavailable`/`unknown` oder fehlendem Entity |
 | `hold_time` | number (ms) | `500` | Dauer bis zum Hold (200–5000) |
@@ -301,7 +348,7 @@ Die **erste** passende Regel gewinnt. `class` wird als CSS-Klasse `custom-<class
 | `thresholds` | Wertfarbe nach Grenzwerten: `[{value: 0, color: …}, …]` |
 | `raw` | `true`: Rohzustand statt der nativ lokalisierten HA-Anzeige |
 
-`values`: `layout: inline | stacked` (Standard `inline`), `separator: " · "`, `gap: 4px`, `font_size: 12px`, `color` (Schriftfarbe beider Werte).
+`values`: `layout: inline | stacked` (Standard `inline`), `separator: " · "`, `gap: 4px`, `font_size: 12px`, `color` (Schriftfarbe beider Werte), `status_dot` (farbiger Punkt vor Wert 1, Standard `false`).
 
 ### Schriftfarben
 
@@ -391,6 +438,7 @@ value_2:
 | `show_points` / `show_grid` / `show_axis` / `show_labels` | `false` | Punkte, Hilfslinien, Nulllinie, Min/Max-Beschriftung |
 | `fade` | `0` | Weicher Übergang an Beginn **und** Ende (Kurzform für beide) |
 | `fade_start` | `fade` | Weicher Übergang am Beginn (links, ältere Werte): Zahl = % der Graphbreite (0–50), oder `"15%"` / `"40px"` |
+| `headroom` | `0.05` | Luft über dem höchsten Wert als Anteil (0–2) |
 | `fade_end` | `fade` | Weicher Übergang am Ende (rechts, aktuelle Werte), gleiche Angaben wie `fade_start` |
 | `color_mode` | `state` | siehe [Farbmodi](#farbmodi) |
 | `color` | `var(--sgbc-graph-color)` | Farbe für `fixed` und Rückfallfarbe. `auto` wählt die Farbe nach Sensortyp |
@@ -610,6 +658,7 @@ Vollständige Beispiele liegen in [`examples/`](examples/):
 - [`state-background.yaml`](examples/state-background.yaml): Statushintergrund und halbtransparenter Graph
 - [`threshold-colors.yaml`](examples/threshold-colors.yaml): 0 bis < 10 W grün, 10 bis < 100 W orange, ab 100 W rot; angewendet auf Symbol, Graph und Hintergrund
 - [`info-cards.yaml`](examples/info-cards.yaml): 4 Info-Karten nebeneinander (Temperatur, Feuchtigkeit, CO₂, Luftdruck)
+- [`designs.yaml`](examples/designs.yaml): die vier Designs für einen Schreibtisch mit Leistungsmesser
 - [`grid-power.yaml`](examples/grid-power.yaml): Netzbezug/Einspeisung als abgerundete Fläche, lila über und grün unter null
 
 ## Visueller Editor
@@ -617,6 +666,7 @@ Vollständige Beispiele liegen in [`examples/`](examples/):
 Im Karteneditor stehen zur Verfügung:
 
 - **Entity, Name, Symbol** sowie **Werte** (Wert 1 und Wert 2)
+- **Design:** Auswahl der vier Designs, großer Wert an/aus und seine Beschriftung; Akzentfarben unter „Farben & Hintergrund“
 - **Graph:** aktivieren, Entity, Typ, Position, Zeitraum, weicher Übergang am Beginn und am Ende (Schieberegler)
 - **Graph-Farben:** Farbmodus wählen. Je nach Modus erscheinen eine feste Farbe, Farben für Ein/Aus, Verlauf von/bis, Farben über/unter null oder die **Grenzwertliste**: Zeilen mit „Ab Wert“ und Farbe, beliebig viele über „Grenzwert hinzufügen“, Entfernen mit ✕. Beim ersten Wechsel auf „Nach Grenzwerten“ ist die Liste mit 10/50/100/200 vorbelegt.
 - **Farben & Hintergrund:** Symbolfarben und Statushintergrund für Ein/Aus, Schriftfarben für Name, beide Werte, Wert 1 und Wert 2, Schalter für automatisch lesbare Schrift

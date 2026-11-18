@@ -158,3 +158,36 @@ test("info icon_position and icon_offset", () => {
   assert.equal(d.icon_offset.x, "-2px");
   throwsWith({ entity: "sensor.t", variant: "info", icon_position: "ecke" }, /icon_position/);
 });
+
+test("designs: defaults for values, hero, graph and tint", () => {
+  const base = { type: "custom:smart-graph-button-card", entity: "switch.desk", graph: { entity: "sensor.p" } };
+  const subtle = validateConfig({ ...base, design: "subtle" });
+  assert.equal(subtle.value_1.type, "state");
+  assert.equal(subtle.value_2.entity, "sensor.p");
+  assert.equal(subtle.hero.entity, "sensor.p");
+  assert.equal(subtle.hero.caption, "aktuell");
+  assert.equal(subtle.hero.style, "text");
+  assert.equal(subtle.graph.position, "bottom");
+  assert.equal(subtle.state_background.enabled, true);
+  assert.equal(subtle.values.status_dot, true);
+  const split = validateConfig({ ...base, design: "split" });
+  assert.equal(split.value_2.type, "last_changed");
+  assert.equal(split.value_2.prefix, "seit ");
+  assert.equal(validateConfig({ ...base, design: "badge" }).hero.style, "badge");
+  const spark = validateConfig({ ...base, design: "sparkline" });
+  assert.equal(spark.hero, undefined);
+  assert.equal(spark.graph.position, "right");
+  assert.equal(spark.values.layout, "stacked");
+  assert.equal(spark.value_2.suffix, " aktuell");
+});
+
+test("designs: user values win, hero false, invalid design", () => {
+  const c = validateConfig({ type: "x", entity: "switch.desk", design: "subtle", hero: false, value_2: false, layout: { height: "90px" }, graph: { type: "line" } });
+  assert.equal(c.hero, undefined);
+  assert.equal(c.value_2, undefined);
+  assert.equal(c.layout.height, "90px");
+  assert.equal(c.graph.type, "line");
+  assert.throws(() => validateConfig({ type: "x", entity: "switch.desk", design: "fancy" }));
+  // sensor only: no duplicate second value
+  assert.equal(validateConfig({ type: "x", entity: "sensor.p", design: "subtle" }).value_2, undefined);
+});

@@ -273,10 +273,105 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 }
 .info-layout .value-2 { font-size: var(--sgbc-value-2-size, var(--sgbc-values-size, 12px)); }
 
+/* ---- large value on the right (hero) */
+.content.has-hero { grid-template-columns: auto minmax(0, 1fr) auto; }
+.content.has-hero.no-icon { grid-template-columns: minmax(0, 1fr) auto; }
+ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge, ha-card.sgbc.design-sparkline { container-type: inline-size; }
+.hero {
+  max-width: 48cqi;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.1;
+  text-align: right;
+}
+.hero.hidden, .hero-caption.hidden { display: none; }
+.hero-value {
+  font-size: var(--sgbc-hero-size, clamp(17px, 6.4cqi, 28px));
+  font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: var(--sgbc-hero-color, var(--sgbc-accent, var(--primary-color)));
+}
+.hero-caption { margin-top: 2px; font-size: 13px; color: var(--secondary-text-color); white-space: nowrap; }
+.hero.hero-badge {
+  align-items: center;
+  padding: 7px clamp(10px, 3.4cqi, 16px) 6px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sgbc-hero-color, var(--sgbc-accent, var(--primary-color))) 68%, #000);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--sgbc-accent, #000) 25%, transparent);
+}
+.hero.hero-badge .hero-value { color: #fff; font-size: var(--sgbc-hero-size, clamp(16px, 5.4cqi, 24px)); }
+.hero.hero-badge .hero-caption { color: rgba(255, 255, 255, 0.92); margin-top: 1px; }
+
+/* ---- status dot in front of the first value ("● Ein") */
+.values.status-dot .value-1::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 3px;
+  border-radius: 50%;
+  background: var(--sgbc-accent, var(--primary-color));
+}
+
+/* ---- designs: content in the upper part, graph below / beside it */
+.divider { display: none; z-index: 3; }
+ha-card.sgbc.design-subtle .content,
+ha-card.sgbc.design-badge .content,
+ha-card.sgbc.design-split .content {
+  height: var(--sgbc-content-height, 72px);
+  align-items: center;
+}
+ha-card.sgbc.design-subtle .info, ha-card.sgbc.design-badge .info, ha-card.sgbc.design-split .info, ha-card.sgbc.design-sparkline .info { gap: 4px; }
+/* 2: separate graph area under a thin line that starts below the name */
+ha-card.sgbc.design-split .divider {
+  display: block;
+  inset: auto;
+  top: calc(var(--sgbc-content-height, 72px) + 2px);
+  left: calc(var(--sgbc-pad-left, 16px) + var(--sgbc-icon-area-size, 50px) + var(--sgbc-gap, 14px));
+  right: 16px;
+  height: 1px;
+  border-radius: 0;
+  background: var(--divider-color, rgba(127, 127, 127, 0.25));
+}
+ha-card.sgbc.design-split.no-icon .divider { left: var(--sgbc-pad-left, 16px); }
+ha-card.sgbc.design-split .graph.pos-bottom { top: calc(var(--sgbc-content-height, 72px) + 8px); height: auto; }
+/* 4: content left, thin vertical line, sparkline on the right */
+ha-card.sgbc.design-sparkline .content { padding-right: calc(var(--sgbc-graph-width, 34%) + 44px); }
+ha-card.sgbc.design-sparkline .graph.pos-right {
+  top: 18px;
+  bottom: 18px;
+  right: 16px;
+  width: var(--sgbc-graph-width, 34%);
+  border-radius: 0;
+}
+ha-card.sgbc.design-sparkline .divider {
+  display: block;
+  inset: auto;
+  top: 16px;
+  bottom: 16px;
+  right: calc(var(--sgbc-graph-width, 34%) + 30px);
+  width: 1px;
+  border-radius: 0;
+  background: var(--divider-color, rgba(127, 127, 127, 0.25));
+}
+ha-card.sgbc.design-sparkline .values.stacked { gap: var(--sgbc-values-gap, 2px); }
+/* status line: the state ("● Aus") keeps its width, the second value gives way */
+.values.status-dot .value-1 { flex-shrink: 0; }
+.values.status-dot .value-2 { flex-shrink: 1; min-width: 0; }
+.values.status-dot.stacked .value { max-width: 100%; }
 .probe { display: none; }
 /* readable text over a graph: soft halo in the card background color */
 ha-card.sgbc.text-halo .name,
-ha-card.sgbc.text-halo .values {
+ha-card.sgbc.text-halo .values,
+ha-card.sgbc.text-halo .hero-text .hero-value,
+ha-card.sgbc.text-halo .hero-text .hero-caption {
   text-shadow: 0 0 2px var(--sgbc-halo-color, transparent), 0 0 6px var(--sgbc-halo-color, transparent);
 }
 .effects { z-index: 5; transition: background-color 120ms ease, box-shadow 120ms ease; }

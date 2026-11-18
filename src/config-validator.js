@@ -41,6 +41,8 @@ export const NAME_OVERFLOW = ["ellipsis", "clip", "wrap"];
 export const MAX_HOURS = 8760;
 export const VARIANTS = ["button", "info"];
 export const TEXT_CONTRAST_MODES = ["auto", "off"];
+export const DESIGNS = ["standard", "subtle", "split", "badge", "sparkline"];
+export const HERO_STYLES = ["text", "badge"];
 export const GRAPH_BASELINES = ["zero", "bottom"];
 
 export class ConfigError extends Error {
@@ -71,6 +73,15 @@ export const DEFAULTS = Object.freeze({
   show_unavailable_badge: true,
   show_name: true,
   text_contrast: "auto",
+  design: "standard",
+  /** Accent per state: status dot, large value, design graphs and tints. */
+  accent_color: {
+    on: "#22c55e",
+    off: "var(--secondary-text-color, #9ca3af)",
+    unavailable: "var(--disabled-text-color, #6b7280)",
+    other: "#22c55e",
+  },
+  hero: undefined,
   value_position: "top-left",
   value_offset: { x: "0px", y: "0px" },
   icon_position: "name-left",
@@ -103,7 +114,7 @@ export const DEFAULTS = Object.freeze({
   },
   value_1: undefined,
   value_2: undefined,
-  values: { layout: "inline", separator: " · ", gap: "4px", font_size: "12px" },
+  values: { layout: "inline", separator: " · ", gap: "4px", font_size: "12px", status_dot: false },
   graph: {
     enabled: false,
     entity: undefined,
@@ -134,6 +145,7 @@ export const DEFAULTS = Object.freeze({
     fade: undefined,
     fade_start: undefined,
     fade_end: undefined,
+    headroom: 0.05,
     color_mode: "state",
     color: "var(--sgbc-graph-color, var(--primary-color, #03a9f4))",
     colors: {
@@ -218,6 +230,56 @@ export const INFO_DEFAULTS = Object.freeze({
   hold_action: { action: "none" },
 });
 
+/**
+ * Defaults of the button designs (design: subtle | split | badge | sparkline).
+ * User values always win over these.
+ */
+const DESIGN_BASE = {
+  icon_area: { size: "50px", icon_size: "28px" },
+  name_style: { font_size: "16px", font_weight: 600 },
+  values: { font_size: "13px", status_dot: true },
+  layout: { padding: "12px 16px", gap: "14px", border_radius: "16px" },
+  graph: {
+    type: "smooth-area",
+    position: "bottom",
+    baseline: "bottom",
+    color_mode: "fixed",
+    color: "var(--sgbc-accent)",
+    line_width: 1.75,
+    fill_opacity: 0.22,
+    opacity: 1,
+    max_points: 40,
+    headroom: 0.45,
+  },
+};
+const ACCENT_TINT = {
+  on: "color-mix(in srgb, var(--sgbc-accent) 9%, transparent)",
+  off: "transparent",
+  unavailable: "transparent",
+  other: "color-mix(in srgb, var(--sgbc-accent) 9%, transparent)",
+};
+export const DESIGN_DEFAULTS = Object.freeze({
+  subtle: mergeDeep(DESIGN_BASE, {
+    layout: { height: "108px" },
+    graph: { height: "50%", fade_start: 4, fade_end: 4 },
+    state_background: { enabled: true, colors: ACCENT_TINT },
+  }),
+  split: mergeDeep(DESIGN_BASE, {
+    layout: { height: "122px" },
+    graph: { height: "42%", fill_opacity: 0.16, headroom: 0.3 },
+  }),
+  badge: mergeDeep(DESIGN_BASE, {
+    layout: { height: "108px" },
+    graph: { height: "50%", fade_start: 4, fade_end: 4 },
+    state_background: { enabled: true, colors: ACCENT_TINT },
+  }),
+  sparkline: mergeDeep(DESIGN_BASE, {
+    layout: { height: "100px" },
+    values: { layout: "stacked", gap: "2px" },
+    graph: { position: "right", width: "34%", fill_opacity: 0.2, max_points: 36, headroom: 0.15 },
+  }),
+});
+
 const VALUE_DEFAULTS = Object.freeze({
   type: "state",
   prefix: "",
@@ -242,8 +304,16 @@ export function validateConfig(raw) {
     throw new ConfigError(`variant „${raw.variant}“ ist ungültig. Erlaubt: button, info.`);
   }
   const isInfo = raw.variant === "info";
-  const c = mergeDeep(isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : DEFAULTS, raw);
+  const design = isInfo || raw.design === undefined ? "standard" : raw.design;
+  if (!DESIGNS.includes(design)) throw new ConfigError(`design „${raw.design}“ ist ungültig. Erlaubt: ${DESIGNS.join(", ")}.`);
+  const isDesign = design !== "standard";
+  const base = isInfo ? mergeDeep(DEFAULTS, INFO_DEFAULTS) : isDesign ? mergeDeep(DEFAULTS, DESIGN_DEFAULTS[design]) : DEFAULTS;
+  const c = mergeDeep(base, raw);
   c.variant = isInfo ? "info" : "button";
+  c.design = design;
+  // entity whose measurement the designs show (power sensor next to a switch)
+  const graphEntity = isPlainObject(raw.graph) && raw.graph.entity ? raw.graph.entity : raw.entity;
+  const extraEntity = graphEntity && graphEntity !== raw.entity ? graphEntity : null;
   // arrays / maps that must not be deep-merged with defaults
   const userMapping = isPlainObject(raw.state_mapping) ? { ...raw.state_mapping } : {};
   // YAML 1.1 turns unquoted on/off keys into true/false
@@ -339,6 +409,15 @@ export function validateConfig(raw) {
       c[key] = normalizeValue({ type: "state" }, key, err); // info card shows the main state
       continue;
     }
+    if (isDesign && raw[key] === undefined) {
+      // designs: "● Ein · 9 W" / "● Ein · seit 08:14 Uhr" / "● Ein" + "9 W aktuell"
+      let def = null;
+      if (key === "value_1") def = { type: "state" };
+      else if (design === "split") def = { type: "last_changed", format: "time", prefix: "seit ", suffix: " Uhr" };
+      else if (extraEntity) def = { entity: extraEntity, type: "state", ...(design === "sparkline" ? { suffix: " aktuell" } : {}) };
+      c[key] = def ? normalizeValue(def, key, err) : undefined;
+      continue;
+    }
     if (raw[key] === undefined || raw[key] === null || raw[key] === false) {
       c[key] = undefined;
       continue;
@@ -354,7 +433,12 @@ export function validateConfig(raw) {
   for (const key of ["value_1", "value_2"]) if (isPlainObject(raw[key])) checkColor(raw[key].color, `${key}.color`, err);
 
   // ---- graph
-  c.graph = normalizeGraph(isInfo && raw.graph === undefined ? {} : raw.graph, c, err);
+  c.graph = normalizeGraph((isInfo || isDesign) && raw.graph === undefined ? {} : raw.graph, c, err);
+
+  // ---- large value on the right ("9 W / aktuell")
+  c.values.status_dot = Boolean(c.values.status_dot);
+  c.hero = normalizeHero(raw.hero, design, c, err);
+  if (!isPlainObject(c.accent_color) && !isSafeCssValue(c.accent_color)) err("accent_color ist keine gültige Farbe.");
 
   // ---- state background / layers
   c.state_background.enabled = Boolean(c.state_background.enabled);
@@ -480,6 +564,27 @@ function normalizeValue(input, key, err) {
   else v.fallback = String(v.fallback);
   v.prefix = v.prefix === null || v.prefix === undefined ? "" : String(v.prefix);
   v.suffix = v.suffix === null || v.suffix === undefined ? "" : String(v.suffix);
+  return v;
+}
+
+const HERO_DESIGNS = { subtle: "text", split: "text", badge: "badge" };
+
+function normalizeHero(rawHero, design, c, err) {
+  if (rawHero === false || rawHero === null) return undefined;
+  if (rawHero === undefined && !HERO_DESIGNS[design]) return undefined;
+  const input = rawHero === undefined || rawHero === true ? {} : rawHero;
+  if (!isPlainObject(input)) {
+    err("hero muss ein Objekt sein (z. B. caption: aktuell).");
+    return undefined;
+  }
+  const { caption, style, ...valueCfg } = input;
+  if (valueCfg.entity === undefined && valueCfg.type !== "text") valueCfg.entity = c.graph?.entity || c.entity;
+  const v = normalizeValue(valueCfg, "hero", err);
+  if (!v) return undefined;
+  v.caption = caption === undefined ? "aktuell" : caption === null || caption === false ? "" : String(caption);
+  v.style = style === undefined ? HERO_DESIGNS[design] || "text" : style;
+  if (!HERO_STYLES.includes(v.style)) err(`hero.style „${v.style}“ ist ungültig. Erlaubt: ${HERO_STYLES.join(", ")}.`);
+  checkColor(input.color, "hero.color", err);
   return v;
 }
 
@@ -622,7 +727,10 @@ function normalizeGraph(rawGraph, c, err) {
     else g.split_at = at;
   }
   // the faded smooth-area looks best with a stronger fill
-  if (g.type === "smooth-area" && c.variant !== "info" && (!isPlainObject(rawGraph) || rawGraph.fill_opacity === undefined)) g.fill_opacity = 0.6;
+  if (g.type === "smooth-area" && c.variant !== "info" && c.design === "standard" && (!isPlainObject(rawGraph) || rawGraph.fill_opacity === undefined)) g.fill_opacity = 0.6;
+  const room = parseNumber(g.headroom);
+  if (room === null || room < 0 || room > 2) err("graph.headroom muss eine Zahl von 0 bis 2 sein (Anteil Luft über dem höchsten Wert).");
+  else g.headroom = room;
   if (!GRAPH_BASELINES.includes(g.baseline)) err(`graph.baseline „${g.baseline}“ ist ungültig. Erlaubt: zero, bottom.`);
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;

@@ -18,7 +18,7 @@ const r4 = (n) => Math.round(n * 10000) / 10000;
  * - constant values get a symmetric padding
  * - bar-like graphs include the zero baseline when auto
  */
-export function computeScale(values, { min = "auto", max = "auto", includeZero = false } = {}) {
+export function computeScale(values, { min = "auto", max = "auto", includeZero = false, headroom = 0.05 } = {}) {
   const finite = values.filter((v) => Number.isFinite(v));
   const manualMin = typeof min === "number" && Number.isFinite(min);
   const manualMax = typeof max === "number" && Number.isFinite(max);
@@ -41,8 +41,12 @@ export function computeScale(values, { min = "auto", max = "auto", includeZero =
       lo -= pad;
       hi += pad;
     } else hi = lo + 1;
-  } else if (!manualMax) {
-    hi += (hi - lo) * 0.05; // small headroom
+  } else {
+    const span = hi - lo;
+    const room = Number.isFinite(headroom) ? Math.max(0, Math.min(2, headroom)) : 0.05;
+    if (!manualMax) hi += span * room; // space above the highest value
+    // a little space below the lowest value as well when there is more headroom
+    if (!manualMin && !includeZero && room > 0.05) lo -= span * room * 0.25;
   }
   return { min: lo, max: hi };
 }
@@ -125,7 +129,7 @@ export function renderGraphSVG(o) {
   // baseline "bottom": areas/bars grow from the bottom edge and the scale is
   // fitted to the data (e.g. temperature 20–28 °C instead of 0–28 °C)
   const bottomBase = o.baseline === "bottom";
-  const scale = computeScale(values, { min: o.min, max: o.max, includeZero: filled && !bottomBase });
+  const scale = computeScale(values, { min: o.min, max: o.max, includeZero: filled && !bottomBase, headroom: o.headroom });
 
   const padTop = type === "bar" || type === "column" ? 0 : Math.ceil(lineWidth / 2) + (o.showPoints ? 2 : 0);
   const padBottom = type === "bar" || type === "column" ? 0 : Math.ceil(lineWidth / 2);

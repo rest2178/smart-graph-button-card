@@ -128,3 +128,35 @@ test("text_contrast toggle maps to text_contrast: off and back", () => {
   const on = formToConfig(off, { ...configToForm(off), text_contrast_auto: true });
   assert.equal(on.text_contrast, undefined);
 });
+
+test("design: switching keeps entities and drops design-provided keys", () => {
+  const cfg = { type: "custom:smart-graph-button-card", entity: "switch.desk", graph: { entity: "sensor.p", type: "line", position: "full", enabled: false } };
+  const form = { ...configToForm(cfg), design: "subtle" };
+  const out = formToConfig(cfg, form);
+  assert.equal(out.design, "subtle");
+  assert.deepEqual(out.graph, { entity: "sensor.p" });
+});
+
+test("design: form defaults reflect the design and do not write values", () => {
+  const cfg = { type: "custom:smart-graph-button-card", entity: "switch.desk", design: "badge", graph: { entity: "sensor.p" } };
+  const form = configToForm(cfg);
+  assert.equal(form.hero_enabled, true);
+  assert.equal(form.value_2_enabled, true);
+  assert.equal(form.state_background_enabled, true);
+  assert.equal(form.graph_type, "smooth-area");
+  const out = formToConfig(cfg, form);
+  assert.equal(out.value_1, undefined);
+  assert.equal(out.value_2, undefined);
+  assert.equal(out.hero, undefined);
+  assert.equal(out.state_background, undefined);
+  assert.equal(out.graph.enabled, true);
+});
+
+test("design: hero off, caption and tint off are stored", () => {
+  const cfg = { type: "custom:smart-graph-button-card", entity: "switch.desk", design: "subtle" };
+  const out = formToConfig(cfg, { ...configToForm(cfg), hero_caption: "jetzt", state_background_enabled: false });
+  assert.deepEqual(out.hero, { caption: "jetzt" });
+  assert.equal(out.state_background.enabled, false);
+  const off = formToConfig(out, { ...configToForm(out), hero_enabled: false });
+  assert.equal(off.hero, false);
+});

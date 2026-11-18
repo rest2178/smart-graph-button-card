@@ -1,0 +1,35 @@
+# Example 7 – the four ready-made designs for a switch with a power sensor.
+# The switch is the main entity (tap toggles it), the power sensor feeds
+# the graph, the second value and the large value on the right.
+type: grid
+columns: 2
+square: false
+cards:
+  # 1 – subtle graph in the background
+  - type: custom:smart-graph-button-card
+    entity: switch.schreibtisch_1
+    icon: mdi:desk
+    design: subtle
+    graph:
+      entity: sensor.schreibtisch_1_leistung
+  # 2 – two areas: content on top, separate graph below a thin line
+  - type: custom:smart-graph-button-card
+    entity: switch.schreibtisch_1
+    icon: mdi:desk
+    design: split
+    graph:
+      entity: sensor.schreibtisch_1_leistung
+  # 3 – colored status: large value in a filled badge
+  - type: custom:smart-graph-button-card
+    entity: switch.schreibtisch_1
+    icon: mdi:desk
+    design: badge
+    graph:
+      entity: sensor.schreibtisch_1_leistung
+  # 4 – minimalistic with a sparkline on the right
+  - type: custom:smart-graph-button-card
+    entity: switch.schreibtisch_1
+    icon: mdi:desk
+    design: sparkline
+    graph:
+      entity: sensor.schreibtisch_1_leistung

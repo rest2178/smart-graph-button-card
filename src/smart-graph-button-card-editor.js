@@ -16,6 +16,16 @@ const VARIANTS = [
   ["info", "Info-Karte (nur Anzeige)"],
 ];
 
+const DESIGNS = [
+  ["standard", "Standard"],
+  ["subtle", "Dezenter Graph im Hintergrund"],
+  ["split", "Zwei Bereiche mit separatem Graph"],
+  ["badge", "Farbiger Status mit Verbrauchsbereich"],
+  ["sparkline", "Minimalistisch mit Sparkline"],
+];
+const HERO_DESIGNS = ["subtle", "split", "badge"];
+const TINT_DESIGNS = ["subtle", "badge"];
+
 const VALUE_POSITIONS = [
   ["top-left", "Oben links (unter dem Namen)"],
   ["top-center", "Oben mittig"],
@@ -95,6 +105,9 @@ const PALETTE = ["#22c55e", "#84cc16", "#eab308", "#f97316", "#ef4444", "#dc2626
 const LABELS = {
   entity: "Entity",
   variant: "Darstellung",
+  design: "Design",
+  hero_enabled: "Großen Wert rechts anzeigen",
+  hero_caption: "Beschriftung unter dem großen Wert",
   name: "Name",
   icon: "Symbol",
   value_1_entity: "Wert 1 – Entity (leer = Haupt-Entity)",
@@ -148,6 +161,19 @@ function mainSchema(cfg) {
       ],
     },
     { name: "show_name", selector: { boolean: {} } },
+    ...(isInfoConfig(cfg)
+      ? []
+      : [
+          { name: "design", selector: { select: { mode: "dropdown", options: options(DESIGNS) } } },
+          {
+            type: "grid",
+            name: "",
+            schema: [
+              { name: "hero_enabled", selector: { boolean: {} } },
+              { name: "hero_caption", selector: { text: {} } },
+            ],
+          },
+        ]),
     ...(isInfoConfig(cfg)
       ? [
           { name: "value_position", selector: { select: { mode: "dropdown", options: options(VALUE_POSITIONS) } } },
@@ -272,7 +298,10 @@ const clone = (v) => JSON.parse(JSON.stringify(v ?? {}));
 
 /** Info cards have the graph enabled by default and other graph defaults. */
 const isInfoConfig = (c) => c?.variant === "info" || c?.type === "custom:smart-graph-info-card";
-const defaultColorMode = (c) => (isInfoConfig(c) ? "fixed" : "state");
+const designOf = (c) => (isInfoConfig(c) ? "standard" : c?.design || "standard");
+const isDesign = (c) => designOf(c) !== "standard";
+const defaultColorMode = (c) => (isInfoConfig(c) || isDesign(c) ? "fixed" : "state");
+const heroOn = (c) => (c?.hero === undefined ? HERO_DESIGNS.includes(designOf(c)) : c.hero !== false && c.hero !== null);
 
 /** Offset in px as number for the slider (0 when unset, undefined for other units). */
 function pxNumber(value) {
@@ -296,17 +325,20 @@ export function configToForm(config) {
     variant: c.variant || "button",
     name: typeof c.name === "string" ? c.name : undefined,
     icon: typeof c.icon === "string" ? c.icon : undefined,
-    value_1_enabled: Boolean(c.value_1),
+    design: designOf(c),
+    hero_enabled: heroOn(c),
+    hero_caption: c.hero && typeof c.hero === "object" && c.hero.caption !== undefined ? String(c.hero.caption ?? "") : undefined,
+    value_1_enabled: c.value_1 === undefined ? isDesign(c) : Boolean(c.value_1),
     value_1_entity: get(c, "value_1.entity"),
     value_1_attribute: get(c, "value_1.attribute"),
-    value_2_enabled: Boolean(c.value_2),
+    value_2_enabled: c.value_2 === undefined ? isDesign(c) : Boolean(c.value_2),
     value_2_entity: get(c, "value_2.entity"),
     value_2_decimals: get(c, "value_2.decimals"),
     value_2_unit: get(c, "value_2.unit"),
-    graph_enabled: c.graph ? get(c, "graph.enabled") !== false : isInfoConfig(c),
+    graph_enabled: c.graph ? get(c, "graph.enabled") !== false : isInfoConfig(c) || isDesign(c),
     graph_entity: get(c, "graph.entity"),
-    graph_type: get(c, "graph.type") || (isInfoConfig(c) ? "smooth-area" : "line"),
-    graph_position: get(c, "graph.position") || (isInfoConfig(c) ? "bottom" : "full"),
+    graph_type: get(c, "graph.type") || (isInfoConfig(c) || isDesign(c) ? "smooth-area" : "line"),
+    graph_position: get(c, "graph.position") || (designOf(c) === "sparkline" ? "right" : isInfoConfig(c) || isDesign(c) ? "bottom" : "full"),
     graph_hours_to_show: get(c, "graph.hours_to_show") ?? 24,
     graph_fade_start: fadePercent(get(c, "graph.fade_start") ?? get(c, "graph.fade")),
     graph_fade_end: fadePercent(get(c, "graph.fade_end") ?? get(c, "graph.fade")),
@@ -321,7 +353,7 @@ export function configToForm(config) {
     icon_offset_x: pxNumber(get(c, "icon_offset.x")),
     icon_offset_y: pxNumber(get(c, "icon_offset.y")),
     graph_gradient_direction: get(c, "graph.gradient.direction") || "vertical",
-    state_background_enabled: Boolean(get(c, "state_background.enabled")),
+    state_background_enabled: get(c, "state_background.enabled") === undefined ? TINT_DESIGNS.includes(designOf(c)) : Boolean(get(c, "state_background.enabled")),
     text_contrast_auto: c.text_contrast !== "off" && c.text_contrast !== false,
     tap_action: c.tap_action,
     hold_action: c.hold_action,
@@ -348,10 +380,38 @@ export function formToConfig(config, form) {
   if (d.show_name === false) out.show_name = false;
   else delete out.show_name;
   if (d.variant && out.type !== "custom:smart-graph-info-card") setPath(out, "variant", d.variant === "button" ? undefined : d.variant);
+  if (d.design !== undefined && !isInfoConfig(out) && d.design !== designOf(config)) {
+    // a new design brings its own look: drop the settings it provides, keep entities and texts
+    setPath(out, "design", d.design === "standard" ? undefined : d.design);
+    for (const path of ["graph.type", "graph.position", "graph.enabled", "graph.color_mode", "graph.height", "graph.width", "state_background.enabled", "layout.height"]) {
+      setPath(out, path, undefined);
+      pruneEmpty(out, path);
+    }
+    if (out.hero === false) delete out.hero;
+    for (const key of ["value_1", "value_2"]) if (out[key] === false) delete out[key];
+    if (d.design === "standard" && out.graph && !out.graph.entity) delete out.graph;
+    return out;
+  }
+  if (d.hero_enabled !== undefined && !isInfoConfig(out)) {
+    const byDesign = HERO_DESIGNS.includes(designOf(out));
+    const caption = typeof d.hero_caption === "string" && d.hero_caption !== "" ? d.hero_caption : undefined;
+    if (!d.hero_enabled) out.hero = byDesign ? false : undefined;
+    else {
+      const hero = out.hero && typeof out.hero === "object" ? out.hero : {};
+      if (caption !== undefined) hero.caption = caption;
+      else if (d.hero_caption === "" || d.hero_caption === undefined) delete hero.caption;
+      out.hero = Object.keys(hero).length || !byDesign ? hero : undefined;
+    }
+    if (out.hero === undefined) delete out.hero;
+  }
   if (d.name !== undefined || typeof out.name === "string") setPath(out, "name", d.name);
   if (d.icon !== undefined || typeof out.icon === "string") setPath(out, "icon", d.icon);
 
-  if (d.value_1_enabled) {
+  // designs fill value 1/2 themselves – only write them when something is changed
+  const designValue = (i) => isDesign(out) && (out[`value_${i}`] === undefined || out[`value_${i}`] === false);
+  if (d.value_1_enabled && designValue(1) && !d.value_1_entity && !d.value_1_attribute) delete out.value_1;
+  else if (!d.value_1_enabled && isDesign(out)) out.value_1 = false;
+  else if (d.value_1_enabled) {
     if (!out.value_1 || typeof out.value_1 !== "object") out.value_1 = { type: "state" };
     setPath(out, "value_1.entity", d.value_1_entity);
     setPath(out, "value_1.attribute", d.value_1_attribute);
@@ -359,14 +419,16 @@ export function formToConfig(config, form) {
     if (!d.value_1_attribute && out.value_1.type === "attribute") out.value_1.type = "state";
   } else delete out.value_1;
 
-  if (d.value_2_enabled) {
+  if (d.value_2_enabled && designValue(2) && !d.value_2_entity && typeof d.value_2_decimals !== "number" && !d.value_2_unit) delete out.value_2;
+  else if (!d.value_2_enabled && isDesign(out)) out.value_2 = false;
+  else if (d.value_2_enabled) {
     if (!out.value_2 || typeof out.value_2 !== "object") out.value_2 = { type: "state" };
     setPath(out, "value_2.entity", d.value_2_entity);
     setPath(out, "value_2.decimals", typeof d.value_2_decimals === "number" ? d.value_2_decimals : undefined);
     setPath(out, "value_2.unit", d.value_2_unit);
   } else delete out.value_2;
 
-  if (d.graph_enabled || out.graph || isInfoConfig(out)) {
+  if (d.graph_enabled || out.graph || isInfoConfig(out) || isDesign(out)) {
     if (!out.graph || typeof out.graph !== "object") out.graph = {};
     if (d.graph_enabled) {
       setPath(out, "graph.entity", d.graph_entity);
@@ -396,8 +458,10 @@ export function formToConfig(config, form) {
     out.graph.enabled = Boolean(d.graph_enabled);
   }
 
-  if (d.state_background_enabled) setPath(out, "state_background.enabled", true);
-  else if (out.state_background) setPath(out, "state_background.enabled", false);
+  const tintDefault = TINT_DESIGNS.includes(designOf(out));
+  if (d.state_background_enabled) setPath(out, "state_background.enabled", tintDefault ? undefined : true);
+  else if (out.state_background || tintDefault) setPath(out, "state_background.enabled", false);
+  pruneEmpty(out, "state_background.enabled");
 
   if (d.text_contrast_auto === false) out.text_contrast = "off";
   else delete out.text_contrast;
@@ -762,7 +826,14 @@ class SmartGraphButtonCardEditor extends EditorBase {
       colorField("Hintergrund „Ein“", get(c, "state_background.colors.on"), (v) => this._set("state_background.colors.on", v), "rgba(34, 197, 94, 0.15)"),
       colorField("Hintergrund „Aus“", get(c, "state_background.colors.off"), (v) => this._set("state_background.colors.off", v), "rgba(148, 163, 184, 0.08)")
     );
-    body.append(icons, this._panelForm(stateBackgroundSchema), backgrounds, h("div", "sgbc-ed-subtitle", "Schrift"), this._panelForm(textContrastSchema), this._textColors());
+    const accent = h("div", "sgbc-ed-grid");
+    const accentField = (label, key, placeholder) => {
+      const value = get(c, "accent_color");
+      if (typeof value === "string") return colorField(label, value, (v) => this._set("accent_color", v), placeholder);
+      return colorField(label, get(c, `accent_color.${key}`), (v) => this._set(`accent_color.${key}`, v), placeholder);
+    };
+    accent.append(accentField("Akzent „Ein“ (Punkt, großer Wert, Graph)", "on", "#22c55e"), accentField("Akzent „Aus“", "off", "#9ca3af"));
+    body.append(icons, accent, this._panelForm(stateBackgroundSchema), backgrounds, h("div", "sgbc-ed-subtitle", "Schrift"), this._panelForm(textContrastSchema), this._textColors());
   }
 
   /** Font colors. Maps per state (YAML) are kept and only shown as a note. */

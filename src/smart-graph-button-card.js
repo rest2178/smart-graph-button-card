@@ -6,7 +6,7 @@
  */
 
 import { CARD_STYLES } from "./styles.js";
-import { validateConfig, ConfigError } from "./config-validator.js";
+import { validateConfig, ConfigError, DESIGN_DEFAULTS } from "./config-validator.js";
 import { getStateGroup, matchCustomState, normalizeThresholdRanges, findThresholdColor, resolveColor } from "./state-resolver.js";
 import { resolveValue, isTemplate, formatNumber, getNumberLocale } from "./value-formatter.js";
 import { fetchHistory } from "./history-provider.js";
@@ -19,7 +19,7 @@ import { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } f
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.6.0";
+export const CARD_VERSION = "1.7.0";
 
 let instanceCounter = 0;
 
@@ -381,13 +381,16 @@ export class SmartGraphButtonCard extends HTMLElement {
     const style = el("style");
     style.textContent = CARD_STYLES;
 
-    const card = el("ha-card", "sgbc", { tabindex: "0", role: "button" });
+    const card = el("ha-card", `sgbc design-${c.design || "standard"}`, { tabindex: "0", role: "button" });
+    // a value counts as configured when the user or the chosen design sets it
+    const configured = (path) => userSet(raw, path) || (c.design && c.design !== "standard" && userSet(DESIGN_DEFAULTS[c.design], path));
     const stateBg = el("div", "layer state-bg");
     // "after-icon" without an icon area is the same as "full"
     const graphPos = c.graph.position === "after-icon" && !c.icon_area.enabled ? "full" : c.graph.position;
     const graph = el("div", `layer graph pos-${graphPos}${c.icon_area.position === "right" ? " mirror" : ""}${c.graph.enabled ? "" : " hidden"}`);
     const overlay = el("div", `layer overlay${c.layers.overlay.enabled ? "" : " hidden"}`);
     const content = el("div", "content");
+    const divider = el("div", "layer divider");
     const effects = el("div", "layer effects");
 
     // icon area
@@ -414,7 +417,10 @@ export class SmartGraphButtonCard extends HTMLElement {
         }
       }
     }
-    if (!iconWrap) content.classList.add("no-icon");
+    if (!iconWrap) {
+      content.classList.add("no-icon");
+      card.classList.add("no-icon");
+    }
     if (c.icon_area.position === "right") content.classList.add("icon-right");
 
     const isInfo = c.variant === "info";
@@ -426,7 +432,7 @@ export class SmartGraphButtonCard extends HTMLElement {
     const name = el("div", `name${c.show_name ? "" : " hidden"}`);
     if (c.name_style.overflow === "wrap" || c.name_style.max_lines > 1) name.classList.add("multiline");
     if (c.name_style.overflow === "clip") name.classList.add("overflow-clip");
-    const values = el("div", `values${c.values.layout === "stacked" ? " stacked" : ""}`);
+    const values = el("div", `values${c.values.layout === "stacked" ? " stacked" : ""}${c.values.status_dot ? " status-dot" : ""}`);
     const makeValue = (i) => {
       const wrap = el("span", `value value-${i}`);
       const icon = el("ha-icon", "hidden", { "aria-hidden": "true" });
@@ -472,7 +478,20 @@ export class SmartGraphButtonCard extends HTMLElement {
       content.append(info);
     }
 
-    card.append(stateBg, graph, overlay, content, effects);
+    // large value on the right ("9 W" + "aktuell"), plain or as a filled badge
+    let hero = null;
+    if (c.hero && !isInfo) {
+      const box = el("div", `hero hero-${c.hero.style}`);
+      const value = el("span", "hero-value");
+      const caption = el("span", `hero-caption${c.hero.caption ? "" : " hidden"}`);
+      caption.textContent = c.hero.caption;
+      box.append(value, caption);
+      content.append(box);
+      content.classList.add("has-hero");
+      hero = { box, value, caption };
+    }
+
+    card.append(stateBg, graph, divider, overlay, content, effects);
     root.append(style, card);
 
     // static CSS variables – layout values are only set when configured so
@@ -492,7 +511,7 @@ export class SmartGraphButtonCard extends HTMLElement {
       background: "--sgbc-background",
     };
     for (const [key, cssVar] of Object.entries(layoutMap)) {
-      if (userSet(raw, `layout.${key}`) && c.layout[key] !== "auto") setVar(cssVar, c.layout[key]);
+      if (configured(`layout.${key}`) && c.layout[key] !== "auto") setVar(cssVar, c.layout[key]);
     }
     if (c.layout.height === "auto") card.classList.add("auto-height");
     setVar("--sgbc-icon-area-size", c.icon_area.size);
@@ -505,6 +524,7 @@ export class SmartGraphButtonCard extends HTMLElement {
     setVar("--sgbc-name-lines", c.name_style.overflow === "wrap" && c.name_style.max_lines === 1 ? 2 : c.name_style.max_lines);
     setVar("--sgbc-values-gap", c.values.gap);
     setVar("--sgbc-values-size", c.values.font_size);
+    if (c.design && c.design !== "standard") setVar("--sgbc-pad-left", paddingSide(c.layout.padding, "left"));
     if (isInfo) {
       setVar("--sgbc-value-dx", c.value_offset.x);
       setVar("--sgbc-value-dy", c.value_offset.y);
@@ -518,7 +538,8 @@ export class SmartGraphButtonCard extends HTMLElement {
       setVar(`--sgbc-value-${i}-size`, v.font_size);
       setVar(`--sgbc-value-${i}-weight`, v.font_weight);
     }
-    if (userSet(raw, "graph.opacity")) setVar("--sgbc-graph-opacity", c.graph.opacity);
+    if (hero?.box && c.hero.font_size) setVar("--sgbc-hero-size", c.hero.font_size);
+    if (configured("graph.opacity")) setVar("--sgbc-graph-opacity", c.graph.opacity);
     if (c.graph.position === "left" || c.graph.position === "right") setVar("--sgbc-graph-width", c.graph.width);
     if (c.graph.position === "bottom") setVar("--sgbc-graph-height", c.graph.height);
     if (graphPos === "after-icon") {
@@ -552,7 +573,7 @@ export class SmartGraphButtonCard extends HTMLElement {
     card.addEventListener("transitionend", (ev) => ev.target === card && recheck());
     const probe = el("span", "probe", { "aria-hidden": "true" });
     content.append(probe);
-    this._els = { card, stateBg, graph, overlay, content, iconWrap, iconArea, iconGraph, glyph, badge, name, values, v1, v2, sep, probe };
+    this._els = { card, stateBg, graph, divider, overlay, content, iconWrap, iconArea, iconGraph, glyph, badge, name, values, v1, v2, sep, hero, probe };
     this._graphSize = { w: 0, h: 0 };
     this._lastSvg = null;
     this._glyphKey = null;
@@ -630,6 +651,7 @@ export class SmartGraphButtonCard extends HTMLElement {
     if (customClass) card.classList.add(`custom-${customClass}`);
 
     // colors
+    setVar("--sgbc-accent", resolveColor(c.accent_color, group, customClass));
     setVar("--sgbc-icon-color", override("icon") ?? resolveColor(c.icon_area.color, group, customClass));
     const ib = override("icon-background");
     setVar("--sgbc-icon-background", ib ? mix(ib, 18) : resolveColor(c.icon_area.background, group, customClass));
@@ -684,6 +706,14 @@ export class SmartGraphButtonCard extends HTMLElement {
         ref.icon.classList.remove("hidden");
       } else ref.icon.classList.add("hidden");
       setVar(`--sgbc-value-${i}-color`, override(`value-${i}`) ?? r.color);
+    }
+    if (els.hero) {
+      const hr = resolveValue(c.hero, hass, ctx);
+      const text = hr && !hr.hidden ? hr.text : "";
+      els.hero.box.classList.toggle("hidden", !text);
+      if (els.hero.value.textContent !== text) els.hero.value.textContent = text;
+      setVar("--sgbc-hero-color", hr?.color ?? null);
+      if (text && !results.some((r) => r && !r.hidden && r.text === text)) results.push({ ...hr, aria: c.hero.caption ? `${hr.aria} ${c.hero.caption}` : hr.aria });
     }
     const bothInline = results[0] && !results[0].hidden && results[1] && !results[1].hidden && c.values.layout === "inline" && c.values.separator !== "";
     els.sep.classList.toggle("hidden", !bothInline);
@@ -983,6 +1013,7 @@ export class SmartGraphButtonCard extends HTMLElement {
     const els = this._els;
     if (!c || !els || typeof getComputedStyle === "undefined") return;
     const targets = [els.name, els.v1.wrap, els.v1.unit, els.sep, els.v2.wrap, els.v2.unit];
+    if (els.hero) targets.push(els.hero.value, els.hero.caption);
     if (c.text_contrast === "off") {
       for (const t of targets) t.style.removeProperty("color");
       els.card.classList.remove("text-halo");
@@ -1004,13 +1035,25 @@ export class SmartGraphButtonCard extends HTMLElement {
         const cs = getComputedStyle(t);
         const fg = this._toRgba(cs.color);
         if (!fg) continue;
-        const backgrounds = [bg];
-        if (graphRect && graphRect.width && graphRect.height) {
+        // backgrounds of the element itself and its parents (e.g. the hero badge)
+        let own = bg;
+        let opaqueOwn = false;
+        const chain = [];
+        for (let n = t; n && n !== els.content; n = n.parentElement) chain.unshift(n);
+        for (const n of chain) {
+          const col = this._toRgba(getComputedStyle(n).backgroundColor);
+          if (col && col.a > 0) {
+            own = composite(col, own);
+            if (col.a >= 0.95) opaqueOwn = true;
+          }
+        }
+        const backgrounds = [own];
+        if (!opaqueOwn && graphRect && graphRect.width && graphRect.height) {
           const r = t.getBoundingClientRect();
           const overlaps = r.width && r.height && r.left < graphRect.right && r.right > graphRect.left && r.top < graphRect.bottom && r.bottom > graphRect.top;
           if (overlaps) {
             halo = true;
-            for (const gc of graphColors) backgrounds.push(composite(gc, bg));
+            for (const gc of graphColors) backgrounds.push(composite(gc, own));
           }
         }
         const fixed = ensureContrast(fg, backgrounds, contrastTarget(parseFloat(cs.fontSize) || 14, cs.fontWeight));
@@ -1055,6 +1098,7 @@ export class SmartGraphButtonCard extends HTMLElement {
       gradient,
       bands,
       baseline: g.baseline,
+      headroom: g.headroom,
       min: g.min,
       max: g.max,
       lineWidth: g.line_width,
