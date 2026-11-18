@@ -68,7 +68,7 @@ Alle drei stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nö
 - Farbmodi `fixed`, `state`, `thresholds` (beliebig viele Grenzwerte, `current` oder `per-point`), `gradient`, `sign` (über/unter null)
 - Info-Karte als moderne Kachel, mit Zustandsring oder als kompakte Statuskachel; Zustandstexte wie „Optimal“ oder „Zu warm“ mit Vorgaben je Sensortyp
 - Übersichtskarte für mehrere Sensoren mit Gesamtbewertung und umschaltbarem Verlauf
-- Vier fertige Designs (`design: subtle | split | badge | sparkline`) mit großem Wert rechts, Statuspunkt und Akzentfarbe
+- Fünf fertige Designs (`design: subtle | split | badge | sparkline | panel`) mit großem Wert rechts, Statuspunkt und Akzentfarbe
 - Statusabhängiger Kartenhintergrund, Lesbarkeits-Overlay, Ebenenreihenfolge einstellbar
 - Automatisch lesbare Schriftfarben im Hell- und Dunkelmodus (Kontrastprüfung, Farbton bleibt erhalten)
 - Eigene Zustandsregeln mit `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `regex`
@@ -185,13 +185,13 @@ Mit `variant: info` lässt sich die Info-Darstellung auch für `custom:smart-gra
 
 ## Designs
 
-Für die Button-Karte gibt es vier fertige Designs. Sie sind für einen Schalter mit Leistungsmesser gedacht: Die Haupt-Entity ist der Schalter (Tippen schaltet), der Graph zeigt den Sensor.
+Für die Button-Karte gibt es fünf fertige Designs. Sie sind für einen Schalter mit Leistungsmesser gedacht: Die Haupt-Entity ist der Schalter (Tippen schaltet), der Graph zeigt den Sensor.
 
 ```yaml
 type: custom:smart-graph-button-card
 entity: switch.schreibtisch_1
 icon: mdi:desk
-design: subtle            # standard | subtle | split | badge | sparkline
+design: subtle            # standard | subtle | split | badge | sparkline | panel
 # design_size: double     # optional: doppelt so hoch (128 px) mit größerem Symbol und Text
 graph:
   entity: sensor.schreibtisch_1_leistung
@@ -203,6 +203,7 @@ graph:
 | `split` | **Zwei Bereiche:** oben der Inhalt mit „● Ein · seit 08:14 Uhr“ und dem großen Wert, darunter eine feine Linie und der Graph in einem eigenen Bereich |
 | `badge` | **Farbiger Status:** wie `subtle`, der große Wert steht in einem farbigen Feld |
 | `sparkline` | **Minimalistisch:** links Symbol, Name, „● Ein“ und „9 W aktuell“, rechts nach einer senkrechten Linie ein kleiner Graph |
+| `panel` | **Akzentleiste mit Wertfeld:** links eine farbige Leiste (grün bei „Ein“, grau bei „Aus“), Symbol in einer abgerundeten Kachel, Name und „● Ein“, in der Mitte ein schlanker Linien-Graph, rechts der Wert „11 W“ in einem leicht eingefärbten Feld |
 | `standard` | bisheriges Aussehen (Standard) |
 
 Alle Designs haben die normale Button-Höhe (64 px), so passen sie zu den übrigen Karten. Mit `design_size: double` werden sie doppelt so hoch (128 px), mit größerem Symbol, größerer Schrift und mehr Platz für den Graphen. Im Editor heißt der Schalter „Doppelte Höhe“. In der normalen Höhe liegt der Graph bei `split` in einem schmalen Streifen unter der Linie, und die Beschriftung „aktuell“ entfällt dort aus Platzgründen.
@@ -214,7 +215,7 @@ Ein Design setzt nur Standardwerte. Alles lässt sich wie gewohnt überschreiben
 ```yaml
 hero:
   caption: jetzt          # Beschriftung, "" = keine
-  style: badge            # text | badge
+  style: badge            # text | badge | box (leicht eingefärbtes Feld)
   # wie value_1/value_2: entity, attribute, decimals, unit, thresholds, color, font_size …
 # hero: false             # ausblenden
 ```
@@ -351,7 +352,7 @@ Alle Optionen sind optional, außer `entity`. CSS-Längen dürfen als Zahl (wird
 | `unavailable_text` | string | natives HA-Format | Text für `unavailable` |
 | `unknown_text` | string | natives HA-Format | Text für `unknown` |
 | `show_name` | bool | `true` | Name anzeigen (`false` blendet ihn aus, z. B. bei der Info-Karte) |
-| `design` | `standard` \| `subtle` \| `split` \| `badge` \| `sparkline` | `standard` | Fertiges Design (siehe [Designs](#designs)) |
+| `design` | `standard` \| `subtle` \| `split` \| `badge` \| `sparkline` \| `panel` | `standard` | Fertiges Design (siehe [Designs](#designs)) |
 | `design_size` | `normal` \| `double` | `normal` | Höhe der Designs: normale Button-Höhe oder doppelt so hoch |
 | `hero` | object \| `false` | je Design | Großer Wert rechts mit Beschriftung |
 | `accent_color` | Farbe oder Zuordnung | `on: #22c55e` | Statuspunkt, großer Wert, Design-Graph |

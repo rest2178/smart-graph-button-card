@@ -21,7 +21,7 @@ import { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } f
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.9.0";
+export const CARD_VERSION = "1.10.0";
 
 let instanceCounter = 0;
 
@@ -545,7 +545,14 @@ export class SmartGraphButtonCard extends HTMLElement {
       hero = { box, value, caption };
     }
 
-    card.append(stateBg, graph, divider, overlay, content, effects);
+    // panel design: the graph sits in the row between status and value box
+    const inlineGraph = c.design === "panel" && !isInfo && c.graph.enabled && (graphPos === "right" || graphPos === "left");
+    if (inlineGraph) {
+      graph.classList.add("inline");
+      content.classList.add("panel-row");
+      content.insertBefore(graph, hero ? hero.box : null);
+    }
+    card.append(stateBg, ...(inlineGraph ? [] : [graph]), divider, overlay, content, effects);
     root.append(style, card);
 
     // static CSS variables – layout values are only set when configured so

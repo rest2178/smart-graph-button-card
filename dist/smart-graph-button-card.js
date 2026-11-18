@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.9.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.10.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -344,7 +344,7 @@ ha-card.sgbc.variant-info { container-type: inline-size; }
 ha-card.sgbc.design-compact.variant-info { border-color: color-mix(in srgb, var(--sgbc-accent) 22%, var(--divider-color, transparent)); }
 
 /* ---- large value on the right (hero) */
-ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge, ha-card.sgbc.design-sparkline { container-type: inline-size; }
+ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge, ha-card.sgbc.design-sparkline, ha-card.sgbc.design-panel { container-type: inline-size; }
 .content.has-hero { grid-template-columns: auto minmax(0, 1fr) auto; }
 .content.has-hero.no-icon { grid-template-columns: minmax(0, 1fr) auto; }
 .hero {
@@ -378,6 +378,20 @@ ha-card.sgbc.design-subtle, ha-card.sgbc.design-split, ha-card.sgbc.design-badge
 }
 .hero.hero-badge .hero-value { color: #fff; font-size: var(--sgbc-hero-size, clamp(14px, 4.6cqi, 18px)); }
 .hero.hero-badge .hero-caption { color: rgba(255, 255, 255, 0.92); margin-top: 0; }
+/* value in a softly tinted box ("11 W") */
+.hero.hero-box {
+  align-items: center;
+  padding: 6px clamp(8px, 3cqi, 14px);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sgbc-hero-color, var(--sgbc-accent, var(--primary-color))) 14%, transparent);
+}
+.hero.hero-box .hero-value {
+  font-size: var(--sgbc-hero-size, clamp(14px, 4.8cqi, 18px));
+  color: var(--sgbc-hero-color, color-mix(in srgb, var(--sgbc-accent, var(--primary-color)) 62%, var(--primary-text-color)));
+}
+.hero.hero-box .hero-caption { margin-top: 0; }
+ha-card.sgbc.design-double .hero.hero-box { padding: 10px clamp(12px, 3.6cqi, 18px); border-radius: 12px; }
+ha-card.sgbc.design-double .hero.hero-box .hero-value { font-size: var(--sgbc-hero-size, clamp(16px, 5.6cqi, 24px)); }
 /* double height: larger value */
 ha-card.sgbc.design-double .hero-value { font-size: var(--sgbc-hero-size, clamp(17px, 6.4cqi, 28px)); }
 ha-card.sgbc.design-double .hero-caption { margin-top: 2px; font-size: 13px; }
@@ -461,6 +475,35 @@ ha-card.sgbc.design-double.design-sparkline .content { padding-right: calc(var(-
 ha-card.sgbc.design-double.design-sparkline .info { gap: 4px; }
 ha-card.sgbc.design-double.design-sparkline .graph.pos-right { top: 18px; bottom: 18px; right: 16px; }
 ha-card.sgbc.design-double.design-sparkline .divider { top: 16px; bottom: 16px; right: calc(var(--sgbc-graph-width, 34%) + 30px); }
+/* 6: accent bar on the left, icon tile, name + status, line graph, value box */
+ha-card.sgbc.design-panel .divider {
+  display: block;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 0;
+  background: var(--sgbc-accent, var(--primary-color));
+  transition: background-color 240ms ease;
+}
+ha-card.sgbc.design-panel .content { padding-left: calc(var(--sgbc-pad-left, 12px) + 4px); }
+ha-card.sgbc.design-panel .info { gap: 2px; }
+ha-card.sgbc.design-panel .icon-area.shape-rounded-square { border-radius: 10px; }
+.content.panel-row { display: flex; }
+.content.panel-row .info { flex: 1 1 auto; min-width: 0; }
+.content.panel-row .hero { flex: none; }
+.content.panel-row .graph.inline {
+  position: relative;
+  inset: auto;
+  /* the graph gives way first so the name stays readable */
+  flex: 1 40 var(--sgbc-graph-width, 34%);
+  max-width: var(--sgbc-graph-width, 34%);
+  width: auto;
+  min-width: 40px;
+  height: var(--sgbc-panel-graph-height, 26px);
+  border-radius: 0;
+  align-self: center;
+}
+ha-card.sgbc.design-double .content.panel-row .graph.inline { height: var(--sgbc-panel-graph-height, 56px); }
+@container (max-width: 250px) { .content.panel-row .graph.inline { display: none; } }
 .probe { display: none; }
 /* readable text over a graph: soft halo in the card background color */
 ha-card.sgbc.text-halo .name,
@@ -2531,8 +2574,8 @@ const NAME_OVERFLOW = ["ellipsis", "clip", "wrap"];
 const MAX_HOURS = 8760;
 const VARIANTS = ["button", "info"];
 const TEXT_CONTRAST_MODES = ["auto", "off"];
-const DESIGNS = ["standard", "subtle", "split", "badge", "sparkline"];
-const HERO_STYLES = ["text", "badge"];
+const DESIGNS = ["standard", "subtle", "split", "badge", "sparkline", "panel"];
+const HERO_STYLES = ["text", "badge", "box"];
 const GRAPH_BASELINES = ["zero", "bottom"];
 
 class ConfigError extends Error {
@@ -2721,7 +2764,7 @@ const INFO_DEFAULTS = Object.freeze({
 });
 
 /**
- * Defaults of the button designs (design: subtle | split | badge | sparkline).
+ * Defaults of the button designs (design: subtle | split | badge | sparkline | panel).
  * User values always win over these.
  */
 const DESIGN_BASE = {
@@ -2761,6 +2804,11 @@ const DESIGN_DEFAULTS = Object.freeze({
   sparkline: mergeDeep(DESIGN_BASE, {
     values: { layout: "stacked", gap: "0px" },
     graph: { position: "right", width: "34%", fill_opacity: 0.2, max_points: 36, headroom: 0.15 },
+  }),
+  // accent bar on the left, icon tile, name + status, line graph, value in a tinted box
+  panel: mergeDeep(DESIGN_BASE, {
+    icon_area: { shape: "rounded-square", size: "40px" },
+    graph: { type: "line", position: "right", width: "34%", fill_opacity: 0, line_width: 1.5, max_points: 48, headroom: 0.15 },
   }),
 });
 const DESIGN_SIZES = ["normal", "double"];
@@ -2826,6 +2874,7 @@ const DESIGN_DOUBLE_EXTRA = {
   badge: { graph: { height: "50%" } },
   split: { graph: { height: "42%" } },
   sparkline: { values: { gap: "2px" } },
+  panel: { icon_area: { size: "50px" }, graph: { width: "28%" } },
 };
 
 /** Defaults a design brings along (normal or double height). */
@@ -2975,7 +3024,7 @@ function validateConfig(raw) {
       let def = null;
       if (key === "value_1") def = { type: "state" };
       else if (design === "split") def = { type: "last_changed", format: "time", prefix: "seit ", suffix: " Uhr" };
-      else if (extraEntity) def = { entity: extraEntity, type: "state", ...(design === "sparkline" ? { suffix: " aktuell" } : {}) };
+      else if (extraEntity && design !== "panel") def = { entity: extraEntity, type: "state", ...(design === "sparkline" ? { suffix: " aktuell" } : {}) };
       c[key] = def ? normalizeValue(def, key, err) : undefined;
       continue;
     }
@@ -3144,7 +3193,9 @@ function normalizeValue(input, key, err) {
   return v;
 }
 
-const HERO_DESIGNS = { subtle: "text", split: "text", badge: "badge" };
+const HERO_DESIGNS = { subtle: "text", split: "text", badge: "badge", panel: "box" };
+/** Caption under the large value when none is configured. */
+const HERO_CAPTIONS = { panel: "" };
 
 function normalizeHero(rawHero, design, c, err) {
   if (rawHero === false || rawHero === null) return undefined;
@@ -3158,7 +3209,7 @@ function normalizeHero(rawHero, design, c, err) {
   if (valueCfg.entity === undefined && valueCfg.type !== "text") valueCfg.entity = c.graph?.entity || c.entity;
   const v = normalizeValue(valueCfg, "hero", err);
   if (!v) return undefined;
-  v.caption = caption === undefined ? "aktuell" : caption === null || caption === false ? "" : String(caption);
+  v.caption = caption === undefined ? HERO_CAPTIONS[design] ?? "aktuell" : caption === null || caption === false ? "" : String(caption);
   v.style = style === undefined ? HERO_DESIGNS[design] || "text" : style;
   if (!HERO_STYLES.includes(v.style)) err(`hero.style „${v.style}“ ist ungültig. Erlaubt: ${HERO_STYLES.join(", ")}.`);
   checkColor(input.color, "hero.color", err);
@@ -3400,6 +3451,7 @@ const DESIGNS = [
   ["split", "Zwei Bereiche mit separatem Graph"],
   ["badge", "Farbiger Status mit Verbrauchsbereich"],
   ["sparkline", "Minimalistisch mit Sparkline"],
+  ["panel", "Akzentleiste mit Wertfeld"],
 ];
 const INFO_DESIGNS = [
   ["standard", "Standard"],
@@ -3407,7 +3459,9 @@ const INFO_DESIGNS = [
   ["ring", "Kachel mit Zustandsring"],
   ["compact", "Kompakte Statuskachel (Farbe nach Messwert)"],
 ];
-const HERO_DESIGNS = ["subtle", "split", "badge"];
+const HERO_DESIGNS = ["subtle", "split", "badge", "panel"];
+/** Designs that show the second value in the large value box instead. */
+const NO_VALUE_2_DESIGNS = ["panel"];
 const TINT_DESIGNS = ["subtle", "badge", "tile", "ring", "compact"];
 const NAMELESS_DESIGNS = ["compact"];
 
@@ -3725,14 +3779,14 @@ function configToForm(config) {
     value_1_enabled: c.value_1 === undefined ? isDesign(c) : Boolean(c.value_1),
     value_1_entity: get(c, "value_1.entity"),
     value_1_attribute: get(c, "value_1.attribute"),
-    value_2_enabled: c.value_2 === undefined ? isDesign(c) : Boolean(c.value_2),
+    value_2_enabled: c.value_2 === undefined ? isDesign(c) && !NO_VALUE_2_DESIGNS.includes(designOf(c)) : Boolean(c.value_2),
     value_2_entity: get(c, "value_2.entity"),
     value_2_decimals: get(c, "value_2.decimals"),
     value_2_unit: get(c, "value_2.unit"),
     graph_enabled: c.graph ? get(c, "graph.enabled") !== false : isInfoConfig(c) || isDesign(c),
     graph_entity: get(c, "graph.entity"),
-    graph_type: get(c, "graph.type") || (isInfoConfig(c) || isDesign(c) ? "smooth-area" : "line"),
-    graph_position: get(c, "graph.position") || (designOf(c) === "sparkline" ? "right" : isInfoConfig(c) || isDesign(c) ? "bottom" : "full"),
+    graph_type: get(c, "graph.type") || (designOf(c) === "panel" && !isInfoConfig(c) ? "line" : isInfoConfig(c) || isDesign(c) ? "smooth-area" : "line"),
+    graph_position: get(c, "graph.position") || (["sparkline", "panel"].includes(designOf(c)) ? "right" : isInfoConfig(c) || isDesign(c) ? "bottom" : "full"),
     graph_hours_to_show: get(c, "graph.hours_to_show") ?? 24,
     graph_fade_start: fadePercent(get(c, "graph.fade_start") ?? get(c, "graph.fade")),
     graph_fade_end: fadePercent(get(c, "graph.fade_end") ?? get(c, "graph.fade")),
@@ -5124,7 +5178,7 @@ const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = 
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.9.0";
+const CARD_VERSION = "1.10.0";
 
 let instanceCounter = 0;
 
@@ -5648,7 +5702,14 @@ class SmartGraphButtonCard extends HTMLElement {
       hero = { box, value, caption };
     }
 
-    card.append(stateBg, graph, divider, overlay, content, effects);
+    // panel design: the graph sits in the row between status and value box
+    const inlineGraph = c.design === "panel" && !isInfo && c.graph.enabled && (graphPos === "right" || graphPos === "left");
+    if (inlineGraph) {
+      graph.classList.add("inline");
+      content.classList.add("panel-row");
+      content.insertBefore(graph, hero ? hero.box : null);
+    }
+    card.append(stateBg, ...(inlineGraph ? [] : [graph]), divider, overlay, content, effects);
     root.append(style, card);
 
     // static CSS variables – layout values are only set when configured so

@@ -152,6 +152,18 @@ test("design: form defaults reflect the design and do not write values", () => {
   assert.equal(out.graph.enabled, true);
 });
 
+test("design: panel form defaults", () => {
+  const cfg = { type: "custom:smart-graph-button-card", entity: "switch.desk", design: "panel", graph: { entity: "sensor.p" } };
+  const form = configToForm(cfg);
+  assert.equal(form.hero_enabled, true);
+  assert.equal(form.value_2_enabled, false);
+  assert.equal(form.graph_type, "line");
+  assert.equal(form.graph_position, "right");
+  const out = formToConfig(cfg, form);
+  assert.equal(out.value_2, false);
+  assert.equal(out.hero, undefined);
+});
+
 test("design: hero off, caption and tint off are stored", () => {
   const cfg = { type: "custom:smart-graph-button-card", entity: "switch.desk", design: "subtle" };
   const out = formToConfig(cfg, { ...configToForm(cfg), hero_caption: "jetzt", state_background_enabled: false });

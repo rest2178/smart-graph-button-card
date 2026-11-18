@@ -42,8 +42,8 @@ export const NAME_OVERFLOW = ["ellipsis", "clip", "wrap"];
 export const MAX_HOURS = 8760;
 export const VARIANTS = ["button", "info"];
 export const TEXT_CONTRAST_MODES = ["auto", "off"];
-export const DESIGNS = ["standard", "subtle", "split", "badge", "sparkline"];
-export const HERO_STYLES = ["text", "badge"];
+export const DESIGNS = ["standard", "subtle", "split", "badge", "sparkline", "panel"];
+export const HERO_STYLES = ["text", "badge", "box"];
 export const GRAPH_BASELINES = ["zero", "bottom"];
 
 export class ConfigError extends Error {
@@ -232,7 +232,7 @@ export const INFO_DEFAULTS = Object.freeze({
 });
 
 /**
- * Defaults of the button designs (design: subtle | split | badge | sparkline).
+ * Defaults of the button designs (design: subtle | split | badge | sparkline | panel).
  * User values always win over these.
  */
 const DESIGN_BASE = {
@@ -272,6 +272,11 @@ export const DESIGN_DEFAULTS = Object.freeze({
   sparkline: mergeDeep(DESIGN_BASE, {
     values: { layout: "stacked", gap: "0px" },
     graph: { position: "right", width: "34%", fill_opacity: 0.2, max_points: 36, headroom: 0.15 },
+  }),
+  // accent bar on the left, icon tile, name + status, line graph, value in a tinted box
+  panel: mergeDeep(DESIGN_BASE, {
+    icon_area: { shape: "rounded-square", size: "40px" },
+    graph: { type: "line", position: "right", width: "34%", fill_opacity: 0, line_width: 1.5, max_points: 48, headroom: 0.15 },
   }),
 });
 export const DESIGN_SIZES = ["normal", "double"];
@@ -337,6 +342,7 @@ const DESIGN_DOUBLE_EXTRA = {
   badge: { graph: { height: "50%" } },
   split: { graph: { height: "42%" } },
   sparkline: { values: { gap: "2px" } },
+  panel: { icon_area: { size: "50px" }, graph: { width: "28%" } },
 };
 
 /** Defaults a design brings along (normal or double height). */
@@ -486,7 +492,7 @@ export function validateConfig(raw) {
       let def = null;
       if (key === "value_1") def = { type: "state" };
       else if (design === "split") def = { type: "last_changed", format: "time", prefix: "seit ", suffix: " Uhr" };
-      else if (extraEntity) def = { entity: extraEntity, type: "state", ...(design === "sparkline" ? { suffix: " aktuell" } : {}) };
+      else if (extraEntity && design !== "panel") def = { entity: extraEntity, type: "state", ...(design === "sparkline" ? { suffix: " aktuell" } : {}) };
       c[key] = def ? normalizeValue(def, key, err) : undefined;
       continue;
     }
@@ -655,7 +661,9 @@ function normalizeValue(input, key, err) {
   return v;
 }
 
-const HERO_DESIGNS = { subtle: "text", split: "text", badge: "badge" };
+const HERO_DESIGNS = { subtle: "text", split: "text", badge: "badge", panel: "box" };
+/** Caption under the large value when none is configured. */
+const HERO_CAPTIONS = { panel: "" };
 
 function normalizeHero(rawHero, design, c, err) {
   if (rawHero === false || rawHero === null) return undefined;
@@ -669,7 +677,7 @@ function normalizeHero(rawHero, design, c, err) {
   if (valueCfg.entity === undefined && valueCfg.type !== "text") valueCfg.entity = c.graph?.entity || c.entity;
   const v = normalizeValue(valueCfg, "hero", err);
   if (!v) return undefined;
-  v.caption = caption === undefined ? "aktuell" : caption === null || caption === false ? "" : String(caption);
+  v.caption = caption === undefined ? HERO_CAPTIONS[design] ?? "aktuell" : caption === null || caption === false ? "" : String(caption);
   v.style = style === undefined ? HERO_DESIGNS[design] || "text" : style;
   if (!HERO_STYLES.includes(v.style)) err(`hero.style „${v.style}“ ist ungültig. Erlaubt: ${HERO_STYLES.join(", ")}.`);
   checkColor(input.color, "hero.color", err);

@@ -22,6 +22,7 @@ const DESIGNS = [
   ["split", "Zwei Bereiche mit separatem Graph"],
   ["badge", "Farbiger Status mit Verbrauchsbereich"],
   ["sparkline", "Minimalistisch mit Sparkline"],
+  ["panel", "Akzentleiste mit Wertfeld"],
 ];
 const INFO_DESIGNS = [
   ["standard", "Standard"],
@@ -29,7 +30,9 @@ const INFO_DESIGNS = [
   ["ring", "Kachel mit Zustandsring"],
   ["compact", "Kompakte Statuskachel (Farbe nach Messwert)"],
 ];
-const HERO_DESIGNS = ["subtle", "split", "badge"];
+const HERO_DESIGNS = ["subtle", "split", "badge", "panel"];
+/** Designs that show the second value in the large value box instead. */
+const NO_VALUE_2_DESIGNS = ["panel"];
 const TINT_DESIGNS = ["subtle", "badge", "tile", "ring", "compact"];
 const NAMELESS_DESIGNS = ["compact"];
 
@@ -347,14 +350,14 @@ export function configToForm(config) {
     value_1_enabled: c.value_1 === undefined ? isDesign(c) : Boolean(c.value_1),
     value_1_entity: get(c, "value_1.entity"),
     value_1_attribute: get(c, "value_1.attribute"),
-    value_2_enabled: c.value_2 === undefined ? isDesign(c) : Boolean(c.value_2),
+    value_2_enabled: c.value_2 === undefined ? isDesign(c) && !NO_VALUE_2_DESIGNS.includes(designOf(c)) : Boolean(c.value_2),
     value_2_entity: get(c, "value_2.entity"),
     value_2_decimals: get(c, "value_2.decimals"),
     value_2_unit: get(c, "value_2.unit"),
     graph_enabled: c.graph ? get(c, "graph.enabled") !== false : isInfoConfig(c) || isDesign(c),
     graph_entity: get(c, "graph.entity"),
-    graph_type: get(c, "graph.type") || (isInfoConfig(c) || isDesign(c) ? "smooth-area" : "line"),
-    graph_position: get(c, "graph.position") || (designOf(c) === "sparkline" ? "right" : isInfoConfig(c) || isDesign(c) ? "bottom" : "full"),
+    graph_type: get(c, "graph.type") || (designOf(c) === "panel" && !isInfoConfig(c) ? "line" : isInfoConfig(c) || isDesign(c) ? "smooth-area" : "line"),
+    graph_position: get(c, "graph.position") || (["sparkline", "panel"].includes(designOf(c)) ? "right" : isInfoConfig(c) || isDesign(c) ? "bottom" : "full"),
     graph_hours_to_show: get(c, "graph.hours_to_show") ?? 24,
     graph_fade_start: fadePercent(get(c, "graph.fade_start") ?? get(c, "graph.fade")),
     graph_fade_end: fadePercent(get(c, "graph.fade_end") ?? get(c, "graph.fade")),

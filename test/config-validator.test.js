@@ -186,6 +186,25 @@ test("designs: defaults for values, hero, graph and tint", () => {
   assert.equal(spark.value_2.suffix, " aktuell");
 });
 
+test("designs: panel – accent bar, line graph in the row, value box", () => {
+  const base = { type: "x", entity: "switch.desk", design: "panel", graph: { entity: "sensor.p" } };
+  const c = validateConfig(base);
+  assert.equal(c.value_1.type, "state");
+  assert.equal(c.value_2, undefined, "the value is shown in the box, not twice");
+  assert.equal(c.hero.style, "box");
+  assert.equal(c.hero.entity, "sensor.p");
+  assert.equal(c.hero.caption, "");
+  assert.equal(c.graph.type, "line");
+  assert.equal(c.graph.position, "right");
+  assert.equal(c.graph.fill_opacity, 0);
+  assert.equal(c.icon_area.shape, "rounded-square");
+  assert.equal(c.values.status_dot, true);
+  assert.equal(c.layout.height, "64px");
+  assert.equal(validateConfig({ ...base, hero: { caption: "aktuell" } }).hero.caption, "aktuell");
+  assert.equal(validateConfig({ ...base, design_size: "double" }).layout.height, "128px");
+  assert.equal(validateConfig({ ...base, design: "subtle", hero: { style: "box" } }).hero.style, "box");
+});
+
 test("designs: user values win, hero false, invalid design", () => {
   const c = validateConfig({ type: "x", entity: "switch.desk", design: "subtle", hero: false, value_2: false, layout: { height: "90px" }, graph: { type: "line" } });
   assert.equal(c.hero, undefined);
