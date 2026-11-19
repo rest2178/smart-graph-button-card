@@ -21,7 +21,7 @@ import { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } f
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.10.0";
+export const CARD_VERSION = "1.10.1";
 
 let instanceCounter = 0;
 
@@ -1104,10 +1104,42 @@ export class SmartGraphButtonCard extends HTMLElement {
    * theme, state backgrounds and graphs behind the text. A configured color
    * keeps its hue; only its lightness is changed when the contrast is too low.
    */
+  /**
+   * Panel design: a long name may run into the graph. The graph is faded
+   * (mask) in the band behind the text so the name stays readable.
+   */
+  _panelOverlap() {
+    const els = this._els;
+    const graph = els?.graph;
+    if (!graph?.classList.contains("inline") || typeof document === "undefined" || !document.createRange) return;
+    let overlap = 0;
+    let band = 0;
+    try {
+      const g = graph.getBoundingClientRect();
+      const n = els.name.getBoundingClientRect();
+      if (g.width && n.width && els.name.textContent && !els.name.classList.contains("hidden")) {
+        const range = document.createRange();
+        range.selectNodeContents(els.name);
+        const textRight = Math.min(range.getBoundingClientRect().right, n.right);
+        overlap = Math.round(Math.min(g.width, textRight - g.left + 6));
+        band = Math.round(Math.min(g.height, n.bottom - g.top + 2));
+      }
+    } catch (_err) {
+      overlap = 0;
+    }
+    const on = overlap > 0 && band > 0;
+    graph.classList.toggle("under-text", on);
+    if (on) {
+      graph.style.setProperty("--sgbc-text-x", `${overlap}px`);
+      graph.style.setProperty("--sgbc-text-y", `${band}px`);
+    }
+  }
+
   _checkContrast() {
     const c = this._config;
     const els = this._els;
     if (!c || !els || typeof getComputedStyle === "undefined") return;
+    this._panelOverlap();
     const targets = [els.name, els.v1.wrap, els.v1.unit, els.sep, els.v2.wrap, els.v2.unit];
     if (els.hero) targets.push(els.hero.value, els.hero.caption);
     if (els.statusLabel) targets.push(els.statusLabel);

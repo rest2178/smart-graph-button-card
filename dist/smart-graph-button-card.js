@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.10.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.10.1 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -487,23 +487,56 @@ ha-card.sgbc.design-panel .divider {
 ha-card.sgbc.design-panel .content { padding-left: calc(var(--sgbc-pad-left, 12px) + 4px); }
 ha-card.sgbc.design-panel .info { gap: 2px; }
 ha-card.sgbc.design-panel .icon-area.shape-rounded-square { border-radius: 10px; }
-.content.panel-row { display: flex; }
-.content.panel-row .info { flex: 1 1 auto; min-width: 0; }
-.content.panel-row .hero { flex: none; }
+/* grid: the name spans info + graph column, so a long name runs into the graph */
+.content.panel-row {
+  grid-template-columns: auto minmax(0, 1fr) minmax(40px, var(--sgbc-graph-width, 34%)) auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  row-gap: 2px;
+}
+.content.panel-row .info { display: contents; }
+.content.panel-row .icon-wrap { grid-column: 1; grid-row: 1 / 3; }
+.content.panel-row .name { grid-column: 2 / 4; grid-row: 1; align-self: end; position: relative; z-index: 1; }
+.content.panel-row .values { grid-column: 2; grid-row: 2; align-self: start; position: relative; z-index: 1; }
+.content.panel-row .graph.inline { grid-column: 3; grid-row: 1 / 3; }
+.content.panel-row .hero { grid-column: 4; grid-row: 1 / 3; }
+/* without icon / icon on the right */
+.content.panel-row.no-icon, .content.panel-row.icon-right { grid-template-columns: minmax(0, 1fr) minmax(40px, var(--sgbc-graph-width, 34%)) auto auto; }
+.content.panel-row.no-icon .name, .content.panel-row.icon-right .name { grid-column: 1 / 3; }
+.content.panel-row.no-icon .values, .content.panel-row.icon-right .values { grid-column: 1; }
+.content.panel-row.no-icon .graph.inline, .content.panel-row.icon-right .graph.inline { grid-column: 2; }
+.content.panel-row.no-icon .hero, .content.panel-row.icon-right .hero { grid-column: 3; }
+.content.panel-row.icon-right .icon-wrap { grid-column: 4; }
 .content.panel-row .graph.inline {
   position: relative;
   inset: auto;
-  /* the graph gives way first so the name stays readable */
-  flex: 1 40 var(--sgbc-graph-width, 34%);
-  max-width: var(--sgbc-graph-width, 34%);
   width: auto;
-  min-width: 40px;
+  min-width: 0;
   height: var(--sgbc-panel-graph-height, 26px);
   border-radius: 0;
   align-self: center;
 }
+/* graph behind a long name: transparent in the text band, soft edge */
+.content.panel-row .graph.inline.under-text {
+  --sgbc-under-mask: linear-gradient(to right, rgba(0, 0, 0, 0.28) 0, rgba(0, 0, 0, 0.28) calc(var(--sgbc-text-x, 0px) - 4px), #000 calc(var(--sgbc-text-x, 0px) + 10px));
+  -webkit-mask-image: var(--sgbc-under-mask), linear-gradient(#000, #000);
+  mask-image: var(--sgbc-under-mask), linear-gradient(#000, #000);
+  -webkit-mask-size: 100% var(--sgbc-text-y, 50%), 100% calc(100% - var(--sgbc-text-y, 50%));
+  mask-size: 100% var(--sgbc-text-y, 50%), 100% calc(100% - var(--sgbc-text-y, 50%));
+  -webkit-mask-position: top left, bottom left;
+  mask-position: top left, bottom left;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
 ha-card.sgbc.design-double .content.panel-row .graph.inline { height: var(--sgbc-panel-graph-height, 56px); }
-@container (max-width: 250px) { .content.panel-row .graph.inline { display: none; } }
+@container (max-width: 250px) {
+  .content.panel-row .graph.inline { display: none; }
+  .content.panel-row { grid-template-columns: auto minmax(0, 1fr) 0 auto; }
+  .content.panel-row.no-icon, .content.panel-row.icon-right { grid-template-columns: minmax(0, 1fr) 0 auto auto; }
+  .content.panel-row .name, .content.panel-row .values { grid-column: 2 / 4; }
+  .content.panel-row.no-icon .name, .content.panel-row.icon-right .name,
+  .content.panel-row.no-icon .values, .content.panel-row.icon-right .values { grid-column: 1 / 3; }
+}
 .probe { display: none; }
 /* readable text over a graph: soft halo in the card background color */
 ha-card.sgbc.text-halo .name,
@@ -5178,7 +5211,7 @@ const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = 
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.10.0";
+const CARD_VERSION = "1.10.1";
 
 let instanceCounter = 0;
 
@@ -6261,10 +6294,42 @@ class SmartGraphButtonCard extends HTMLElement {
    * theme, state backgrounds and graphs behind the text. A configured color
    * keeps its hue; only its lightness is changed when the contrast is too low.
    */
+  /**
+   * Panel design: a long name may run into the graph. The graph is faded
+   * (mask) in the band behind the text so the name stays readable.
+   */
+  _panelOverlap() {
+    const els = this._els;
+    const graph = els?.graph;
+    if (!graph?.classList.contains("inline") || typeof document === "undefined" || !document.createRange) return;
+    let overlap = 0;
+    let band = 0;
+    try {
+      const g = graph.getBoundingClientRect();
+      const n = els.name.getBoundingClientRect();
+      if (g.width && n.width && els.name.textContent && !els.name.classList.contains("hidden")) {
+        const range = document.createRange();
+        range.selectNodeContents(els.name);
+        const textRight = Math.min(range.getBoundingClientRect().right, n.right);
+        overlap = Math.round(Math.min(g.width, textRight - g.left + 6));
+        band = Math.round(Math.min(g.height, n.bottom - g.top + 2));
+      }
+    } catch (_err) {
+      overlap = 0;
+    }
+    const on = overlap > 0 && band > 0;
+    graph.classList.toggle("under-text", on);
+    if (on) {
+      graph.style.setProperty("--sgbc-text-x", `${overlap}px`);
+      graph.style.setProperty("--sgbc-text-y", `${band}px`);
+    }
+  }
+
   _checkContrast() {
     const c = this._config;
     const els = this._els;
     if (!c || !els || typeof getComputedStyle === "undefined") return;
+    this._panelOverlap();
     const targets = [els.name, els.v1.wrap, els.v1.unit, els.sep, els.v2.wrap, els.v2.unit];
     if (els.hero) targets.push(els.hero.value, els.hero.caption);
     if (els.statusLabel) targets.push(els.statusLabel);

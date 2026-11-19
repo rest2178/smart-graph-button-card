@@ -203,7 +203,7 @@ graph:
 | `split` | **Zwei Bereiche:** oben der Inhalt mit „● Ein · seit 08:14 Uhr“ und dem großen Wert, darunter eine feine Linie und der Graph in einem eigenen Bereich |
 | `badge` | **Farbiger Status:** wie `subtle`, der große Wert steht in einem farbigen Feld |
 | `sparkline` | **Minimalistisch:** links Symbol, Name, „● Ein“ und „9 W aktuell“, rechts nach einer senkrechten Linie ein kleiner Graph |
-| `panel` | **Akzentleiste mit Wertfeld:** links eine farbige Leiste (grün bei „Ein“, grau bei „Aus“), Symbol in einer abgerundeten Kachel, Name und „● Ein“, in der Mitte ein schlanker Linien-Graph, rechts der Wert „11 W“ in einem leicht eingefärbten Feld |
+| `panel` | **Akzentleiste mit Wertfeld:** links eine farbige Leiste (grün bei „Ein“, grau bei „Aus“), Symbol in einer abgerundeten Kachel, Name und „● Ein“, in der Mitte ein schlanker Linien-Graph, rechts der Wert „11 W“ in einem leicht eingefärbten Feld. Ein langer Name läuft in den Graphen hinein; der Graph wird hinter der Schrift durchscheinend |
 | `standard` | bisheriges Aussehen (Standard) |
 
 Alle Designs haben die normale Button-Höhe (64 px), so passen sie zu den übrigen Karten. Mit `design_size: double` werden sie doppelt so hoch (128 px), mit größerem Symbol, größerer Schrift und mehr Platz für den Graphen. Im Editor heißt der Schalter „Doppelte Höhe“. In der normalen Höhe liegt der Graph bei `split` in einem schmalen Streifen unter der Linie, und die Beschriftung „aktuell“ entfällt dort aus Platzgründen.
