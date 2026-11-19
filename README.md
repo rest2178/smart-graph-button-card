@@ -15,15 +15,16 @@ Eine kompakte, frei parametrierbare **Button-Karte für Home Assistant** mit Sym
 └──────────────────────────────────────────┘
 ```
 
-## Drei Kartentypen
+## Vier Kartentypen
 
 | Typ | Zweck |
 | --- | --- |
 | `custom:smart-graph-button-card` | Schaltbare Button-Karte: Symbol, Name, zwei Werte, Graph, Aktionen |
 | `custom:smart-graph-info-card` | Reine Info-Karte für Messwerte (Temperatur, Luftfeuchtigkeit …): kleines Symbol und Name oben, großer Wert, Verlauf unten. Gleiche Höhe wie der Button, bis zu 4 nebeneinander. Mit `design: tile | ring | compact` als moderne Kachel mit Zustandstext |
 | `custom:smart-graph-overview-card` | Mehrere Sensoren in einer Karte (z. B. Luftqualität): Gesamtbewertung, alle Werte, umschaltbarer Verlauf |
+| `custom:smart-graph-media-card` | Media-Player steuern (Alexa, Sonos, Google Cast, Spotify …): Ein/Aus, Lautstärke, Zurück/Wiedergabe/Weiter und Sender-Tasten |
 
-Alle drei stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
+Alle vier stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
 
 ## Inhalt
 
@@ -315,6 +316,60 @@ hours_to_show: 24
 | `ratings` | siehe oben | Eigene Texte: Liste mit drei Einträgen `{label, text, color}` für gut, mäßig, schlecht |
 
 Der visuelle Editor bietet Titel, Sensoren, Start-Verlauf, Zeitraum und die Schalter für Bewertung und Verlauf.
+
+## Media-Karte (Alexa, Sonos, Cast …)
+
+`custom:smart-graph-media-card` steuert einen Media-Player: Symbol und Name, Menü ▾ zum Umschalten von Player und Quelle, Ein/Aus-Taste, Lautstärke mit Stummschalten, Zurück / Wiedergabe / Weiter und frei belegbare Sender-Tasten. Die Karte nutzt nur die Standard-Dienste von `media_player` und funktioniert deshalb mit jeder Integration: Alexa Media Player, Sonos, Google Cast, Spotify, Music Assistant, HEOS, MusicCast, DLNA, Squeezebox, Fernseher und AV-Receiver.
+
+```yaml
+type: custom:smart-graph-media-card
+entity: media_player.alexa_schlafzimmer
+entities:                         # optional: weitere Player, umschaltbar über ▾
+  - media_player.alexa_kueche
+presets:
+  - name: Radio Steiermark
+    media_content_id: Radio Steiermark
+  - name: Radio Flamingo
+    media_content_id: Radio Flamingo
+  - name: Ö3
+    media_content_id: Hitradio Ö3
+```
+
+Unter dem Namen steht, was gerade läuft (Titel · Interpret bzw. Sender), sonst der Zustand. Das Bild des Senders oder Covers erscheint je nach `artwork` als kleines Bild oben links, als Hintergrund oder beides.
+
+Tasten, die der Player nicht unterstützt (`supported_features`), werden ausgeblendet; ist der Player nicht verfügbar, sind alle Bedienelemente gesperrt. Der laufende Sender wird hervorgehoben (Vergleich mit Titel, Sender und Quelle; mit `match: …` lässt sich ein eigener Suchtext angeben). Der zuletzt gewählte Player bleibt im Browser gespeichert.
+
+**Sender-Tasten (`presets`)** – drei Arten:
+
+| Art | Beispiel | Aufruf |
+| --- | --- | --- |
+| Medien abspielen | `media_content_id: Hitradio Ö3` | `media_player.play_media` |
+| Quelle / Favorit wählen | `source: Ö1` | `media_player.select_source` |
+| Beliebige Aktion | `action: script.morgen_radio`, optional `data:` (`entity_id: current` = der gewählte Player) | jeder Dienst |
+
+Ohne `media_content_type` wählt die Karte den passenden Typ nach der Integration des Players:
+
+| Integration | Standard-Typ | Hinweis |
+| --- | --- | --- |
+| Alexa Media Player | `TUNEIN` | Sendername wie in der Alexa-App. Alternativ `media_content_type: AMAZON_MUSIC` oder `custom` mit einem Sprachbefehl („spiele Radio Steiermark“) |
+| Sonos | `favorite_item_id` bei `FV:…`, sonst `music` | Favoriten am einfachsten über `source:` |
+| Music Assistant | `radio` (Name) bzw. `music` (URL) | |
+| Spotify | `playlist`, `album` … aus der `spotify:`-URI | |
+| alle anderen (Cast, DLNA …) | `music` | Stream-URL als `media_content_id` |
+
+| Option | Standard | Beschreibung |
+| --- | --- | --- |
+| `entity` | – | Media-Player (Pflicht) |
+| `entities` | – | Weitere Player, als Text oder `{entity, name}` |
+| `name` / `icon` | Entity | Eigener Name / eigenes Symbol |
+| `presets` | – | Sender-Tasten, siehe oben; je Taste auch `icon` |
+| `preset_columns` | bis zu 3 | Spalten der Sender-Tasten (1–6) |
+| `show_power` / `show_volume` / `show_controls` | `true` | Ein/Aus, Lautstärke, Zurück/Wiedergabe/Weiter |
+| `show_media_info` | `true` | Titel und Interpret (bzw. Zustand) unter dem Namen |
+| `show_source_list` | `true` | Quellen des Players im Menü ▾ |
+| `artwork` | `thumbnail` | Bild des Senders bzw. Covers, solange etwas läuft: `thumbnail` (kleines Bild statt Symbol), `background` (unscharf als Hintergrund der Karte, abgedunkelt bzw. aufgehellt, damit alles lesbar bleibt), `both` (beides), `none` (kein Bild) |
+
+Im visuellen Editor lassen sich Player, Name, Symbol und alle Schalter einstellen; die Sender-Tasten werden dort als YAML-Liste bearbeitet. Weitere Beispiele: [examples/media.yaml](examples/media.yaml).
 
 ## Minimale Konfiguration
 

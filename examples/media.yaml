@@ -1,0 +1,33 @@
+# Example 10 – media player card: Alexa with radio stations as presets.
+# Works with every media_player (Alexa Media Player, Sonos, Google Cast,
+# Spotify, Music Assistant …). With several players the ▾ menu switches them.
+type: custom:smart-graph-media-card
+entity: media_player.alexa_schlafzimmer
+entities:
+  - media_player.alexa_kueche
+presets:
+  - name: Radio Steiermark
+    media_content_id: Radio Steiermark
+  - name: Radio Flamingo
+    media_content_id: Radio Flamingo
+  - name: Ö3
+    media_content_id: Hitradio Ö3
+---
+# Sonos: favorites as source, Cast: stream URL, any player: a script
+type: custom:smart-graph-media-card
+entity: media_player.sonos_wohnzimmer
+artwork: both                 # thumbnail | background | both | none
+preset_columns: 2
+presets:
+  - name: Ö1
+    source: Ö1
+  - name: FM4 Stream
+    media_content_id: https://orf-live.ors-shoutcast.at/fm4-q2a
+    media_content_type: music
+  - name: Morgenroutine
+    action: script.morgen_radio
+  - name: Lautstärke 20 %
+    action: media_player.volume_set
+    data:
+      entity_id: current
+      volume_level: 0.2
