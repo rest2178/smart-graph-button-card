@@ -1,3 +1,5 @@
+<p align="center"><img src="https://raw.githubusercontent.com/rest2178/smart-graph-button-card/main/images/icon-256.png" alt="Smart Graph Button Card" width="128" height="128"></p>
+
 # Smart Graph Button Card
 
 Eine kompakte, frei parametrierbare **Button-Karte für Home Assistant** mit Symbol, Bezeichnung, bis zu zwei Werten und einem **integrierten Verlaufsgraphen**. Alles ist selbst implementiert: der SVG-Graph, das Laden der History-Daten, die Aktionen und der visuelle Editor.

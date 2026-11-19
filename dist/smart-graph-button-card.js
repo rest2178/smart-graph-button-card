@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.11.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.11.1 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -5272,7 +5272,7 @@ const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = 
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.11.0";
+const CARD_VERSION = "1.11.1";
 
 let instanceCounter = 0;
 

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22c55e" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#22c55e" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#0b1b3f" flood-opacity="0.35"/>
+    </filter>
+    <clipPath id="card"><rect x="30" y="66" width="196" height="124" rx="22"/></clipPath>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <rect x="30" y="66" width="196" height="124" rx="22" fill="#ffffff"/>
+  </g>
+  <g clip-path="url(#card)">
+    <rect x="30" y="66" width="8" height="124" fill="#22c55e"/>
+    <path d="M38 172 L60 160 L78 166 L98 146 L118 154 L138 130 L158 140 L178 112 L198 126 L226 100 L226 190 L38 190 Z" fill="url(#fill)"/>
+    <path d="M38 172 L60 160 L78 166 L98 146 L118 154 L138 130 L158 140 L178 112 L198 126 L226 100" fill="none" stroke="#22c55e" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <rect x="52" y="82" width="44" height="44" rx="12" fill="#e0f2fe"/>
+  <path d="M74 91 l-9 17 h8 l-3 12 l12 -18 h-8 l4 -11 z" fill="#0284c7"/>
+  <rect x="108" y="88" width="66" height="10" rx="5" fill="#1f2937"/>
+  <circle cx="113" cy="114" r="5" fill="#22c55e"/>
+  <rect x="123" y="109" width="30" height="9" rx="4.5" fill="#9ca3af"/>
+  <rect x="180" y="84" width="36" height="28" rx="9" fill="#dcfce7"/>
+  <rect x="188" y="94" width="20" height="8" rx="4" fill="#15803d"/>
+</svg>
