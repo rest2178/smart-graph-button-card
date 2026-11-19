@@ -30,6 +30,10 @@ const INFO_DESIGNS = [
   ["ring", "Kachel mit Zustandsring"],
   ["compact", "Kompakte Statuskachel (Farbe nach Messwert)"],
 ];
+const ICON_COLOR_SOURCES = [
+  ["fixed", "Vorgegebene Farbe"],
+  ["light", "Aktuelle Farbe des Lichts (z. B. LED-Streifen)"],
+];
 const HERO_DESIGNS = ["subtle", "split", "badge", "panel"];
 /** Designs that show the second value in the large value box instead. */
 const NO_VALUE_2_DESIGNS = ["panel"];
@@ -120,6 +124,7 @@ const LABELS = {
   levels_enabled: "Zustand anzeigen (z. B. „Optimal“, „Zu warm“)",
   hero_enabled: "Großen Wert rechts anzeigen",
   hero_caption: "Beschriftung unter dem großen Wert",
+  icon_color_source: "Symbolfarbe bei eingeschaltetem Licht",
   name: "Name",
   icon: "Symbol",
   value_1_entity: "Wert 1 – Entity (leer = Haupt-Entity)",
@@ -173,6 +178,9 @@ function mainSchema(cfg) {
       ],
     },
     { name: "show_name", selector: { boolean: {} } },
+    ...(String(cfg?.entity || "").startsWith("light.") || get(cfg, "icon_area.color_source") === "light"
+      ? [{ name: "icon_color_source", selector: { select: { mode: "dropdown", options: options(ICON_COLOR_SOURCES) } } }]
+      : []),
     ...(isInfoConfig(cfg)
       ? [
           { name: "design", selector: { select: { mode: "dropdown", options: options(INFO_DESIGNS) } } },
@@ -343,6 +351,7 @@ export function configToForm(config) {
     name: typeof c.name === "string" ? c.name : undefined,
     icon: typeof c.icon === "string" ? c.icon : undefined,
     design: designOf(c),
+    icon_color_source: get(c, "icon_area.color_source") || "fixed",
     design_double: c.design_size === "double",
     levels_enabled: c.levels !== false,
     hero_enabled: heroOn(c),
@@ -397,6 +406,10 @@ export function formToConfig(config, form) {
   if (d.value_position && d.value_position !== "top-left") out.value_position = d.value_position;
   else if (d.value_position === "top-left") delete out.value_position;
   const namelessDefault = isInfoConfig(out) && NAMELESS_DESIGNS.includes(designOf(out));
+  if (d.icon_color_source !== undefined) {
+    setPath(out, "icon_area.color_source", d.icon_color_source === "light" ? "light" : undefined);
+    pruneEmpty(out, "icon_area.color_source");
+  }
   if (d.show_name === false) out.show_name = false;
   else if (d.show_name === true && namelessDefault) out.show_name = true;
   else delete out.show_name;

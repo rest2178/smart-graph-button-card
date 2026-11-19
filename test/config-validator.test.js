@@ -249,3 +249,9 @@ test("info designs: tile, ring, compact defaults", () => {
   assert.throws(() => validateConfig({ ...base, design: "tile", levels: [{ value: "x", color: "red" }] }));
   assert.equal(validateConfig(base).levels, false);
 });
+
+test("icon_area.color_source: fixed by default, light allowed", () => {
+  assert.equal(validateConfig({ type: "x", entity: "light.wled" }).icon_area.color_source, "fixed");
+  assert.equal(validateConfig({ type: "x", entity: "light.wled", icon_area: { color_source: "light" } }).icon_area.color_source, "light");
+  assert.throws(() => validateConfig({ type: "x", entity: "light.wled", icon_area: { color_source: "rainbow" } }));
+});

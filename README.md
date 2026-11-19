@@ -402,8 +402,19 @@ Die **erste** passende Regel gewinnt. `class` wird als CSS-Klasse `custom-<class
 | `icon_size` | `22px` | Symbolgröße |
 | `position` | `left` | `left` oder `right` |
 | `color` | HA-Variablen | Map je Zustand oder Klasse: `on`, `off`, `unavailable`, `other`, `default`, eigene Klassen |
+| `color_source` | `fixed` | `fixed`: Farbe aus `color`. `light`: Bei einem eingeschalteten Licht (z. B. WLED-Streifen) leuchtet das Symbol in der aktuell eingestellten Farbe (aus `rgb_color`, `hs_color` oder der Farbtemperatur); ist das Licht aus, gilt wieder `color`. Sehr helle Farben wie Weiß werden auf hellem Hintergrund leicht abgedunkelt, damit das Symbol sichtbar bleibt. Im Editor: „Symbolfarbe bei eingeschaltetem Licht“ (erscheint bei `light.*`-Entities) |
 | `background` | 16 % der Symbolfarbe | Map wie `color` |
 | `animation` | alles `none` | `on`, `off`, `unavailable`, `other`, eigene Klassen: `none`, `pulse`, `rotate`, `blink`; `duration: 1.5s` |
+
+Beispiel für einen LED-Streifen:
+
+```yaml
+type: custom:smart-graph-button-card
+entity: light.wled_wohnzimmer
+icon: mdi:led-strip-variant
+icon_area:
+  color_source: light
+```
 
 ### Name (`name_style`)
 

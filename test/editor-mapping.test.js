@@ -204,3 +204,13 @@ test("info designs in the editor", () => {
   assert.equal(info.variant, "info");
   assert.equal(info.design, undefined);
 });
+
+test("icon color source: light is stored, fixed removes it", () => {
+  const cfg = { type: "custom:smart-graph-button-card", entity: "light.wled" };
+  const form = configToForm(cfg);
+  assert.equal(form.icon_color_source, "fixed");
+  const out = formToConfig(cfg, { ...form, icon_color_source: "light" });
+  assert.equal(out.icon_area.color_source, "light");
+  const back = formToConfig(out, { ...configToForm(out), icon_color_source: "fixed" });
+  assert.equal(back.icon_area, undefined);
+});

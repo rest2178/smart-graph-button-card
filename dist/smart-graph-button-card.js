@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.10.1 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.11.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -2598,6 +2598,7 @@ const INFO_ICON_POSITIONS = [
   "middle-left", "middle-center", "middle-right",
   "bottom-left", "bottom-center", "bottom-right",
 ];
+const ICON_COLOR_SOURCES = ["fixed", "light"];
 const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
 const ICON_POSITIONS = ["left", "right"];
 const ANIMATIONS = ["none", "pulse", "rotate", "blink"];
@@ -2654,6 +2655,8 @@ const DEFAULTS = Object.freeze({
   icon_offset: { x: "0px", y: "0px" },
   icon_area: {
     enabled: true,
+    /** fixed: configured colors; light: current color of a light (e.g. WLED) while on */
+    color_source: "fixed",
     shape: "circle",
     size: "42px",
     icon_size: "22px",
@@ -3030,6 +3033,7 @@ function validateConfig(raw) {
   // ---- icon area
   const ia = c.icon_area;
   if (!ICON_SHAPES.includes(ia.shape)) err(`icon_area.shape „${ia.shape}“ ist ungültig. Erlaubt: ${ICON_SHAPES.join(", ")}.`);
+  if (!ICON_COLOR_SOURCES.includes(ia.color_source)) err(`icon_area.color_source „${ia.color_source}“ ist ungültig. Erlaubt: ${ICON_COLOR_SOURCES.join(", ")}.`);
   if (!ICON_POSITIONS.includes(ia.position)) err(`icon_area.position „${ia.position}“ ist ungültig. Erlaubt: left, right.`);
   ia.size = cssLen(ia.size, "icon_area.size", err);
   ia.icon_size = cssLen(ia.icon_size, "icon_area.icon_size", err);
@@ -3396,7 +3400,7 @@ function normalizeGraph(rawGraph, c, err) {
   for (const k of ["show_points", "show_grid", "show_axis", "show_labels"]) g[k] = Boolean(g[k]);
   return g;
 }
-return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, VALUE_POSITIONS, INFO_ICON_POSITIONS, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, TEXT_CONTRAST_MODES, DESIGNS, HERO_STYLES, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, DESIGN_DEFAULTS, DESIGN_SIZES, INFO_DESIGNS, INFO_DESIGN_DEFAULTS, designDefaults, validateConfig, fadeLength };
+return { GRAPH_POSITIONS, COLOR_MODES, THRESHOLD_MODES, THRESHOLD_BLENDS, VALUE_POSITIONS, INFO_ICON_POSITIONS, ICON_COLOR_SOURCES, ICON_SHAPES, ICON_POSITIONS, ANIMATIONS, VALUE_LAYOUTS, COLOR_TARGETS, NAME_OVERFLOW, MAX_HOURS, VARIANTS, TEXT_CONTRAST_MODES, DESIGNS, HERO_STYLES, GRAPH_BASELINES, ConfigError, DEFAULTS, INFO_DEFAULTS, DESIGN_DEFAULTS, DESIGN_SIZES, INFO_DESIGNS, INFO_DESIGN_DEFAULTS, designDefaults, validateConfig, fadeLength };
 })();
 
 // ---- src/color-utils.js
@@ -3456,7 +3460,50 @@ function applyPickedColor(previous, pickedHex) {
   if (old && old.a < 1) return `rgba(${picked.r}, ${picked.g}, ${picked.b}, ${old.a})`;
   return toHex(picked);
 }
-return { parseColor, toHex, applyPickedColor };
+
+function hsvToRgb(h, s, v) {
+  const f = (n) => {
+    const k = (n + h / 60) % 6;
+    return Math.round((v - v * s * Math.max(0, Math.min(k, 4 - k, 1))) * 255);
+  };
+  return { r: f(5), g: f(3), b: f(1), a: 1 };
+}
+
+/** Approximate color of a white light with a color temperature (Kelvin). */
+function kelvinToRgb(kelvin) {
+  const t = Math.max(1000, Math.min(40000, kelvin)) / 100;
+  const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  const r = t <= 66 ? 255 : 329.698727446 * (t - 60) ** -0.1332047592;
+  const g = t <= 66 ? 99.4708025861 * Math.log(t) - 161.1195681661 : 288.1221695283 * (t - 60) ** -0.0755148492;
+  const b = t >= 66 ? 255 : t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307;
+  return { r: clamp(r), g: clamp(g), b: clamp(b), a: 1 };
+}
+
+/**
+ * Current color of a light entity (e.g. a WLED strip) from its attributes:
+ * rgb_color, else hs_color, else the color temperature. Returns {r,g,b,a} or
+ * null when the light is off or has no color information.
+ */
+function lightColor(stateObj) {
+  const a = stateObj?.attributes;
+  if (!a || stateObj.state !== "on") return null;
+  const num = (v) => (typeof v === "number" ? v : Number(v));
+  if (Array.isArray(a.rgb_color) && a.rgb_color.length >= 3) {
+    const [r, g, b] = a.rgb_color.map(num);
+    if ([r, g, b].every(Number.isFinite)) {
+      const ch = (v) => Math.max(0, Math.min(255, Math.round(v)));
+      return { r: ch(r), g: ch(g), b: ch(b), a: 1 };
+    }
+  }
+  if (Array.isArray(a.hs_color) && a.hs_color.length >= 2) {
+    const [h, sat] = a.hs_color.map(num);
+    if (Number.isFinite(h) && Number.isFinite(sat)) return hsvToRgb(((h % 360) + 360) % 360, Math.max(0, Math.min(100, sat)) / 100, 1);
+  }
+  const kelvin = num(a.color_temp_kelvin) || (num(a.color_temp) ? 1e6 / num(a.color_temp) : NaN);
+  if (Number.isFinite(kelvin) && kelvin > 0) return kelvinToRgb(kelvin);
+  return null;
+}
+return { parseColor, toHex, applyPickedColor, lightColor };
 })();
 
 // ---- src/smart-graph-button-card-editor.js
@@ -3491,6 +3538,10 @@ const INFO_DESIGNS = [
   ["tile", "Moderne Kachel (Wert, Status, Graph)"],
   ["ring", "Kachel mit Zustandsring"],
   ["compact", "Kompakte Statuskachel (Farbe nach Messwert)"],
+];
+const ICON_COLOR_SOURCES = [
+  ["fixed", "Vorgegebene Farbe"],
+  ["light", "Aktuelle Farbe des Lichts (z. B. LED-Streifen)"],
 ];
 const HERO_DESIGNS = ["subtle", "split", "badge", "panel"];
 /** Designs that show the second value in the large value box instead. */
@@ -3582,6 +3633,7 @@ const LABELS = {
   levels_enabled: "Zustand anzeigen (z. B. „Optimal“, „Zu warm“)",
   hero_enabled: "Großen Wert rechts anzeigen",
   hero_caption: "Beschriftung unter dem großen Wert",
+  icon_color_source: "Symbolfarbe bei eingeschaltetem Licht",
   name: "Name",
   icon: "Symbol",
   value_1_entity: "Wert 1 – Entity (leer = Haupt-Entity)",
@@ -3635,6 +3687,9 @@ function mainSchema(cfg) {
       ],
     },
     { name: "show_name", selector: { boolean: {} } },
+    ...(String(cfg?.entity || "").startsWith("light.") || get(cfg, "icon_area.color_source") === "light"
+      ? [{ name: "icon_color_source", selector: { select: { mode: "dropdown", options: options(ICON_COLOR_SOURCES) } } }]
+      : []),
     ...(isInfoConfig(cfg)
       ? [
           { name: "design", selector: { select: { mode: "dropdown", options: options(INFO_DESIGNS) } } },
@@ -3805,6 +3860,7 @@ function configToForm(config) {
     name: typeof c.name === "string" ? c.name : undefined,
     icon: typeof c.icon === "string" ? c.icon : undefined,
     design: designOf(c),
+    icon_color_source: get(c, "icon_area.color_source") || "fixed",
     design_double: c.design_size === "double",
     levels_enabled: c.levels !== false,
     hero_enabled: heroOn(c),
@@ -3859,6 +3915,10 @@ function formToConfig(config, form) {
   if (d.value_position && d.value_position !== "top-left") out.value_position = d.value_position;
   else if (d.value_position === "top-left") delete out.value_position;
   const namelessDefault = isInfoConfig(out) && NAMELESS_DESIGNS.includes(designOf(out));
+  if (d.icon_color_source !== undefined) {
+    setPath(out, "icon_area.color_source", d.icon_color_source === "light" ? "light" : undefined);
+    pruneEmpty(out, "icon_area.color_source");
+  }
   if (d.show_name === false) out.show_name = false;
   else if (d.show_name === true && namelessDefault) out.show_name = true;
   else delete out.show_name;
@@ -5205,13 +5265,14 @@ const { renderGraphSVG } = __m_graph_renderer_js;
 const { GestureRecognizer, bindActionHandler, handleAction, hasAction } = __m_action_handler_js;
 const { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx, paddingSide } = __m_utils_js;
 const { EDITOR_TAG } = __m_smart_graph_button_card_editor_js;
+const { lightColor } = __m_color_utils_js;
 const { registerOverviewCard } = __m_overview_card_js;
 const { resolveLevels, findLevel, ringFraction, TYPE_COLORS, TYPE_ICONS } = __m_levels_js;
 const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = __m_contrast_js;
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.10.1";
+const CARD_VERSION = "1.11.0";
 
 let instanceCounter = 0;
 
@@ -5936,7 +5997,10 @@ class SmartGraphButtonCard extends HTMLElement {
       const f = group === "unavailable" ? 0 : ringFraction(mainObj?.state, deviceClass, c.ring ? [c.ring.min, c.ring.max] : null);
       els.ring.arc.setAttribute("stroke-dasharray", `${Math.round(f * 1000) / 10} 100`);
     }
-    setVar("--sgbc-icon-color", override("icon") ?? resolveColor(c.icon_area.color, group, customClass));
+    // icon in the current color of a light (WLED strip …) while it is on
+    const iconOverride = override("icon");
+    this._lightIcon = !iconOverride && c.icon_area.color_source === "light" && group === "on" ? lightColor(mainObj) : null;
+    setVar("--sgbc-icon-color", iconOverride ?? (this._lightIcon ? rgbString(this._lightIcon) : resolveColor(c.icon_area.color, group, customClass)));
     const ib = override("icon-background");
     setVar("--sgbc-icon-background", ib ? mix(ib, 18) : resolveColor(c.icon_area.background, group, customClass));
     const cb = override("card-background");
@@ -6379,6 +6443,11 @@ class SmartGraphButtonCard extends HTMLElement {
         if (fixed) t.style.setProperty("color", rgbString(fixed));
       }
       els.card.classList.toggle("text-halo", halo);
+      // light color as icon color: keep a white / very pale strip color visible on a light card
+      if (this._lightIcon) {
+        const fixed = ensureContrast(this._lightIcon, [bg], 1.8, 2.2);
+        els.card.style.setProperty("--sgbc-icon-color", rgbString(fixed || this._lightIcon));
+      }
       els.card.style.setProperty("--sgbc-halo-color", rgbString(bg));
     } catch (_err) {
       /* contrast is a nicety – never break the card */

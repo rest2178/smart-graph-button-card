@@ -33,6 +33,7 @@ export const INFO_ICON_POSITIONS = [
   "middle-left", "middle-center", "middle-right",
   "bottom-left", "bottom-center", "bottom-right",
 ];
+export const ICON_COLOR_SOURCES = ["fixed", "light"];
 export const ICON_SHAPES = ["circle", "rounded-square", "square", "none"];
 export const ICON_POSITIONS = ["left", "right"];
 export const ANIMATIONS = ["none", "pulse", "rotate", "blink"];
@@ -89,6 +90,8 @@ export const DEFAULTS = Object.freeze({
   icon_offset: { x: "0px", y: "0px" },
   icon_area: {
     enabled: true,
+    /** fixed: configured colors; light: current color of a light (e.g. WLED) while on */
+    color_source: "fixed",
     shape: "circle",
     size: "42px",
     icon_size: "22px",
@@ -465,6 +468,7 @@ export function validateConfig(raw) {
   // ---- icon area
   const ia = c.icon_area;
   if (!ICON_SHAPES.includes(ia.shape)) err(`icon_area.shape „${ia.shape}“ ist ungültig. Erlaubt: ${ICON_SHAPES.join(", ")}.`);
+  if (!ICON_COLOR_SOURCES.includes(ia.color_source)) err(`icon_area.color_source „${ia.color_source}“ ist ungültig. Erlaubt: ${ICON_COLOR_SOURCES.join(", ")}.`);
   if (!ICON_POSITIONS.includes(ia.position)) err(`icon_area.position „${ia.position}“ ist ungültig. Erlaubt: left, right.`);
   ia.size = cssLen(ia.size, "icon_area.size", err);
   ia.icon_size = cssLen(ia.icon_size, "icon_area.icon_size", err);

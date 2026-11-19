@@ -15,13 +15,14 @@ import { renderGraphSVG } from "./graph-renderer.js";
 import { GestureRecognizer, bindActionHandler, handleAction, hasAction } from "./action-handler.js";
 import { parseNumber, isDisplayable, isSafeCssValue, cssLengthToPx, paddingSide } from "./utils.js";
 import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
+import { lightColor } from "./color-utils.js";
 import { registerOverviewCard } from "./overview-card.js";
 import { resolveLevels, findLevel, ringFraction, TYPE_COLORS, TYPE_ICONS } from "./levels.js";
 import { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } from "./contrast.js";
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.10.1";
+export const CARD_VERSION = "1.11.0";
 
 let instanceCounter = 0;
 
@@ -746,7 +747,10 @@ export class SmartGraphButtonCard extends HTMLElement {
       const f = group === "unavailable" ? 0 : ringFraction(mainObj?.state, deviceClass, c.ring ? [c.ring.min, c.ring.max] : null);
       els.ring.arc.setAttribute("stroke-dasharray", `${Math.round(f * 1000) / 10} 100`);
     }
-    setVar("--sgbc-icon-color", override("icon") ?? resolveColor(c.icon_area.color, group, customClass));
+    // icon in the current color of a light (WLED strip …) while it is on
+    const iconOverride = override("icon");
+    this._lightIcon = !iconOverride && c.icon_area.color_source === "light" && group === "on" ? lightColor(mainObj) : null;
+    setVar("--sgbc-icon-color", iconOverride ?? (this._lightIcon ? rgbString(this._lightIcon) : resolveColor(c.icon_area.color, group, customClass)));
     const ib = override("icon-background");
     setVar("--sgbc-icon-background", ib ? mix(ib, 18) : resolveColor(c.icon_area.background, group, customClass));
     const cb = override("card-background");
@@ -1189,6 +1193,11 @@ export class SmartGraphButtonCard extends HTMLElement {
         if (fixed) t.style.setProperty("color", rgbString(fixed));
       }
       els.card.classList.toggle("text-halo", halo);
+      // light color as icon color: keep a white / very pale strip color visible on a light card
+      if (this._lightIcon) {
+        const fixed = ensureContrast(this._lightIcon, [bg], 1.8, 2.2);
+        els.card.style.setProperty("--sgbc-icon-color", rgbString(fixed || this._lightIcon));
+      }
       els.card.style.setProperty("--sgbc-halo-color", rgbString(bg));
     } catch (_err) {
       /* contrast is a nicety – never break the card */
