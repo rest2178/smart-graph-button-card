@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.14.1 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.15.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -6815,6 +6815,511 @@ function registerMediaCard() {
 return { MEDIA_TAG, MEDIA_EDITOR_TAG, FEATURES, supports, MediaConfigError, ARTWORK_MODES, PRESET_STYLES, presetImageKey, validateMediaConfig, artworkUrl, defaultContentType, presetCall, activePreset, pressedPreset, playlistItems, playlistFolders, findPlaylists, volumeIcon, SmartGraphMediaCard, presetToForm, presetFromForm, presetSchema, mediaToForm, mediaFromForm, SmartGraphMediaCardEditor, registerMediaCard };
 })();
 
+// ---- src/weather-badge.js
+const __m_weather_badge_js = (() => {
+/**
+ * Smart Graph Weather Badge – weather in badge height (36 px), in the style of
+ * the info card designs: tinted icon circle, temperature, condition and a soft
+ * forecast graph in the background.
+ *
+ * type: custom:smart-graph-weather-badge   (dashboard badges)
+ */
+const { renderGraphSVG } = __m_graph_renderer_js;
+const { formatNumber, getNumberLocale } = __m_value_formatter_js;
+const { isPlainObject, parseNumber } = __m_utils_js;
+
+const WEATHER_TAG = "smart-graph-weather-badge";
+const WEATHER_EDITOR_TAG = "smart-graph-weather-badge-editor";
+
+const Base = typeof HTMLElement !== "undefined" ? HTMLElement : class {};
+const WEATHER_RE = /^weather\.[a-z0-9_]+$/;
+
+/** Icon, accent color and German name per weather condition. */
+const CONDITIONS = Object.freeze({
+  "clear-night": { icon: "mdi:weather-night", color: "#6366f1", label: "Klar" },
+  cloudy: { icon: "mdi:weather-cloudy", color: "#64748b", label: "Bewölkt" },
+  exceptional: { icon: "mdi:alert-circle-outline", color: "#ef4444", label: "Unwetter" },
+  fog: { icon: "mdi:weather-fog", color: "#94a3b8", label: "Nebel" },
+  hail: { icon: "mdi:weather-hail", color: "#06b6d4", label: "Hagel" },
+  lightning: { icon: "mdi:weather-lightning", color: "#8b5cf6", label: "Gewitter" },
+  "lightning-rainy": { icon: "mdi:weather-lightning-rainy", color: "#8b5cf6", label: "Gewitter, Regen" },
+  partlycloudy: { icon: "mdi:weather-partly-cloudy", color: "#f59e0b", label: "Teilweise bewölkt" },
+  pouring: { icon: "mdi:weather-pouring", color: "#2563eb", label: "Starkregen" },
+  rainy: { icon: "mdi:weather-rainy", color: "#3b82f6", label: "Regen" },
+  snowy: { icon: "mdi:weather-snowy", color: "#0ea5e9", label: "Schnee" },
+  "snowy-rainy": { icon: "mdi:weather-snowy-rainy", color: "#0ea5e9", label: "Schneeregen" },
+  sunny: { icon: "mdi:weather-sunny", color: "#f59e0b", label: "Sonnig" },
+  windy: { icon: "mdi:weather-windy", color: "#14b8a6", label: "Windig" },
+  "windy-variant": { icon: "mdi:weather-windy-variant", color: "#14b8a6", label: "Windig, bewölkt" },
+});
+const UNKNOWN = { icon: "mdi:weather-cloudy-alert", color: "#9ca3af", label: "" };
+
+function conditionInfo(condition) {
+  return CONDITIONS[condition] || UNKNOWN;
+}
+
+const INFO_MODES = ["condition", "humidity", "wind", "high_low", "none"];
+const FORECAST_MODES = ["auto", "hourly", "daily", "none"];
+
+// weather entity supported_features
+const FORECAST_DAILY = 1;
+const FORECAST_HOURLY = 2;
+
+class WeatherConfigError extends Error {}
+
+function validateWeatherConfig(raw) {
+  if (!isPlainObject(raw)) throw new WeatherConfigError("Die Konfiguration muss ein Objekt sein.");
+  const errors = [];
+  if (typeof raw.entity !== "string" || !WEATHER_RE.test(raw.entity)) errors.push(`entity „${raw.entity ?? ""}“ ist keine weather-Entity (z. B. weather.forecast_home).`);
+  const info = raw.info === undefined ? "condition" : raw.info;
+  if (!INFO_MODES.includes(info)) errors.push(`info „${raw.info}“ ist ungültig. Erlaubt: ${INFO_MODES.join(", ")}.`);
+  const forecast = raw.forecast === undefined ? "auto" : raw.forecast === false ? "none" : raw.forecast;
+  if (!FORECAST_MODES.includes(forecast)) errors.push(`forecast „${raw.forecast}“ ist ungültig. Erlaubt: ${FORECAST_MODES.join(", ")}.`);
+  let decimals = raw.decimals === undefined ? 0 : parseNumber(raw.decimals);
+  if (decimals === null || decimals < 0 || decimals > 2 || !Number.isInteger(decimals)) {
+    errors.push("decimals muss 0, 1 oder 2 sein.");
+    decimals = 0;
+  }
+  if (errors.length) throw new WeatherConfigError(errors.join("\n"));
+  return {
+    type: raw.type,
+    entity: raw.entity,
+    name: typeof raw.name === "string" && raw.name ? raw.name : undefined,
+    show_name: raw.show_name === true,
+    show_icon: raw.show_icon !== false,
+    info,
+    forecast,
+    decimals,
+    color: typeof raw.color === "string" && raw.color ? raw.color : undefined,
+  };
+}
+
+/** Which forecast to subscribe to (or null). */
+function forecastType(mode, supportedFeatures) {
+  const f = Number(supportedFeatures) || 0;
+  if (mode === "none") return null;
+  if (mode === "hourly") return f & FORECAST_HOURLY ? "hourly" : null;
+  if (mode === "daily") return f & FORECAST_DAILY ? "daily" : null;
+  return f & FORECAST_HOURLY ? "hourly" : f & FORECAST_DAILY ? "daily" : null;
+}
+
+/** Graph points from forecast entries: next 24 h (hourly) or up to 7 days. */
+function forecastPoints(forecast, type, now = Date.now()) {
+  if (!Array.isArray(forecast)) return [];
+  const future = forecast.filter((f) => f && Number.isFinite(Number(f.temperature)) && (!f.datetime || Date.parse(f.datetime) >= now - 3600e3));
+  return future.slice(0, type === "hourly" ? 24 : 7).map((f) => ({ v: Number(f.temperature) }));
+}
+
+/** Second text after the temperature ("Sonnig", "62 %", "12 km/h", "18° / 9°"). */
+function infoText(mode, stateObj, { conditionLabel, daily, locale } = {}) {
+  const a = stateObj?.attributes || {};
+  if (mode === "condition") return conditionLabel || "";
+  if (mode === "humidity") return Number.isFinite(Number(a.humidity)) ? `${formatNumber(Number(a.humidity), { decimals: 0, locale })} %` : "";
+  if (mode === "wind") {
+    const v = Number(a.wind_speed);
+    return Number.isFinite(v) ? `${formatNumber(v, { decimals: 0, locale })} ${a.wind_speed_unit || "km/h"}` : "";
+  }
+  if (mode === "high_low") {
+    const today = Array.isArray(daily) ? daily[0] : null;
+    const hi = Number(today?.temperature);
+    const lo = Number(today?.templow);
+    if (!Number.isFinite(hi)) return "";
+    return Number.isFinite(lo) ? `${formatNumber(hi, { decimals: 0, locale })}° / ${formatNumber(lo, { decimals: 0, locale })}°` : `${formatNumber(hi, { decimals: 0, locale })}°`;
+  }
+  return "";
+}
+
+const STYLES = `
+:host { display: inline-block; max-width: 100%; }
+.badge {
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--ha-badge-size, 36px);
+  min-width: var(--ha-badge-size, 36px);
+  max-width: 100%;
+  padding: 0 14px 0 4px;
+  border-radius: var(--ha-badge-border-radius, calc(var(--ha-badge-size, 36px) / 2));
+  border: var(--ha-card-border-width, 1px) solid var(--ha-card-border-color, var(--divider-color, rgba(127, 127, 127, 0.25)));
+  background: var(--ha-card-background, var(--card-background-color, #fff));
+  color: var(--primary-text-color);
+  overflow: hidden;
+  isolation: isolate;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+  --sgwb-accent: var(--primary-color, #03a9f4);
+}
+.badge.no-icon { padding-left: 14px; }
+.badge:focus-visible { outline: 2px solid var(--sgwb-accent); outline-offset: 2px; }
+.badge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: color-mix(in srgb, var(--sgwb-accent) 7%, transparent);
+}
+.graph {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 44%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.85;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 45%, #000 92%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 45%, #000 92%, transparent 100%);
+}
+.graph svg { display: block; width: 100%; height: 100%; }
+.icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--ha-badge-size, 36px) - 8px);
+  height: calc(var(--ha-badge-size, 36px) - 8px);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sgwb-accent) 18%, transparent);
+  color: var(--sgwb-accent);
+  --mdc-icon-size: 18px;
+}
+.text { display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.15; text-shadow: 0 0 3px var(--ha-card-background, var(--card-background-color, #fff)), 0 0 1px var(--ha-card-background, var(--card-background-color, #fff)); }
+.label { font-size: 10px; font-weight: 500; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.1px; }
+.line { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
+.temp { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+.info { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; }
+.hidden { display: none !important; }
+.warn { color: var(--error-color, #db4437); font-size: 12px; }
+`;
+
+function el(tag, className, attrs) {
+  const n = document.createElement(tag);
+  if (className) n.className = className;
+  if (attrs) for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+}
+
+let uid = 0;
+
+class SmartGraphWeatherBadge extends Base {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._uid = `sgwb${(uid += 1)}`;
+    this._forecast = { hourly: null, daily: null };
+  }
+
+  static getConfigElement() {
+    return document.createElement(WEATHER_EDITOR_TAG);
+  }
+
+  static getStubConfig(hass) {
+    const id = Object.keys(hass?.states || {}).find((e) => e.startsWith("weather.")) || "weather.forecast_home";
+    return { entity: id };
+  }
+
+  setConfig(config) {
+    try {
+      this._config = validateWeatherConfig(config);
+      this._error = null;
+    } catch (err) {
+      this._config = null;
+      this._error = err.message || String(err);
+    }
+    this._unsubscribe();
+    this._forecast = { hourly: null, daily: null };
+    this._build();
+    if (this._hass) this.hass = this._hass;
+  }
+
+  set hass(hass) {
+    const prev = this._hass;
+    this._hass = hass;
+    if (!this._config || !this._els) return;
+    this._subscribe();
+    if (!prev || prev.states?.[this._config.entity] !== hass.states?.[this._config.entity] || !this._drawn) this._update();
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
+  connectedCallback() {
+    if (this._hass && this._config) this._subscribe();
+    if (typeof ResizeObserver !== "undefined" && this._els && !this._ro) {
+      this._ro = new ResizeObserver(() => this._drawGraph());
+      this._ro.observe(this._els.badge);
+    }
+  }
+
+  disconnectedCallback() {
+    this._unsubscribe();
+    this._ro?.disconnect();
+    this._ro = null;
+  }
+
+  _build() {
+    const root = this.shadowRoot;
+    root.innerHTML = "";
+    const style = el("style");
+    style.textContent = STYLES;
+    const badge = el("div", "badge", { role: "button", tabindex: "0" });
+    root.append(style, badge);
+    this._els = null;
+    this._drawn = false;
+    if (!this._config) {
+      const warn = el("span", "warn");
+      warn.textContent = this._error || "Ungültige Konfiguration.";
+      badge.append(warn);
+      return;
+    }
+    const c = this._config;
+    const graph = el("div", "graph", { "aria-hidden": "true" });
+    const icon = el("span", `icon${c.show_icon ? "" : " hidden"}`);
+    const glyph = el("ha-icon");
+    icon.append(glyph);
+    const text = el("div", "text");
+    const label = el("span", `label${c.show_name ? "" : " hidden"}`);
+    const line = el("span", "line");
+    const temp = el("span", "temp");
+    const info = el("span", "info");
+    line.append(temp, info);
+    text.append(label, line);
+    badge.classList.toggle("no-icon", !c.show_icon);
+    badge.append(graph, icon, text);
+    const open = () => this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: c.entity }, bubbles: true, composed: true }));
+    badge.addEventListener("click", open);
+    badge.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        open();
+      }
+    });
+    this._els = { badge, graph, glyph, label, temp, info };
+    if (this.isConnected) this.connectedCallback();
+  }
+
+  _subscribe() {
+    const c = this._config;
+    const s = this._hass?.states?.[c.entity];
+    const conn = this._hass?.connection;
+    if (!s || !conn?.subscribeMessage) return;
+    const wanted = new Set();
+    const graphType = forecastType(c.forecast, s.attributes?.supported_features);
+    if (graphType) wanted.add(graphType);
+    if (c.info === "high_low" && forecastType("daily", s.attributes?.supported_features)) wanted.add("daily");
+    const key = `${c.entity}|${[...wanted].sort().join(",")}`;
+    if (this._subKey === key) return;
+    this._unsubscribe();
+    this._subKey = key;
+    this._graphType = graphType;
+    this._subs = [...wanted].map((type) =>
+      conn
+        .subscribeMessage(
+          (msg) => {
+            this._forecast[type] = Array.isArray(msg?.forecast) ? msg.forecast : [];
+            this._update();
+          },
+          { type: "weather/subscribe_forecast", forecast_type: type, entity_id: c.entity }
+        )
+        .catch(() => null)
+    );
+  }
+
+  _unsubscribe() {
+    for (const p of this._subs || []) Promise.resolve(p).then((unsub) => typeof unsub === "function" && unsub());
+    this._subs = [];
+    this._subKey = null;
+  }
+
+  _update() {
+    const c = this._config;
+    const els = this._els;
+    if (!c || !els || !this._hass) return;
+    this._drawn = true;
+    const s = this._hass.states?.[c.entity];
+    const unavailable = !s || s.state === "unavailable" || s.state === "unknown";
+    const cond = conditionInfo(s?.state);
+    const accent = c.color || (unavailable ? "var(--disabled-text-color, #9ca3af)" : cond.color);
+    els.badge.style.setProperty("--sgwb-accent", accent);
+    const icon = unavailable ? "mdi:weather-cloudy-alert" : cond.icon;
+    if (els.glyph.icon !== icon) {
+      els.glyph.icon = icon;
+      els.glyph.setAttribute("icon", icon);
+    }
+    const name = c.name || s?.attributes?.friendly_name || c.entity;
+    els.label.textContent = name;
+    const locale = getNumberLocale(this._hass);
+    const t = Number(s?.attributes?.temperature);
+    const unit = s?.attributes?.temperature_unit || "°C";
+    const tempText = unavailable || !Number.isFinite(t) ? "–" : `${formatNumber(t, { decimals: c.decimals, locale })} ${unit}`;
+    if (els.temp.textContent !== tempText) els.temp.textContent = tempText;
+    const label = unavailable
+      ? "Nicht verfügbar"
+      : (this._hass.formatEntityState && s ? this._hass.formatEntityState(s) : "") || cond.label || s.state;
+    const info = unavailable ? "Nicht verfügbar" : infoText(c.info, s, { conditionLabel: label, daily: this._forecast.daily, locale });
+    if (els.info.textContent !== info) els.info.textContent = info;
+    els.info.classList.toggle("hidden", !info);
+    els.badge.setAttribute("aria-label", [c.show_name ? name : "", tempText, info].filter(Boolean).join(", "));
+    els.badge.title = [name, tempText, label].filter(Boolean).join(" · ");
+    this._drawGraph();
+  }
+
+  _drawGraph() {
+    const els = this._els;
+    if (!els || !this._config) return;
+    const type = this._graphType;
+    const points = type ? forecastPoints(this._forecast[type], type) : [];
+    const w = els.graph.clientWidth;
+    const h = els.graph.clientHeight;
+    const svg =
+      points.length > 1 && w && h
+        ? renderGraphSVG({ data: points, width: w, height: h, type: "smooth-area", color: "var(--sgwb-accent)", baseline: "bottom", headroom: 0.15, lineWidth: 1.25, fillOpacity: 0.22, idPrefix: this._uid })
+        : "";
+    if (svg !== this._lastSvg) {
+      els.graph.innerHTML = svg;
+      this._lastSvg = svg;
+    }
+  }
+}
+
+// ---- editor
+
+const LABELS = {
+  entity: "Wetter-Entity",
+  name: "Name (optional)",
+  show_name: "Name über der Temperatur",
+  show_icon: "Wettersymbol",
+  info: "Zusatz neben der Temperatur",
+  forecast: "Verlauf im Hintergrund",
+  decimals: "Nachkommastellen",
+};
+
+function weatherToForm(config) {
+  const c = config || {};
+  return {
+    entity: c.entity,
+    name: c.name,
+    show_name: c.show_name === true,
+    show_icon: c.show_icon !== false,
+    info: c.info || "condition",
+    forecast: c.forecast === false ? "none" : c.forecast || "auto",
+    decimals: c.decimals ?? 0,
+  };
+}
+
+function weatherFromForm(config, form) {
+  const out = { ...(config || {}) };
+  const d = form || {};
+  if (d.entity) out.entity = d.entity;
+  if (typeof d.name === "string" && d.name) out.name = d.name;
+  else delete out.name;
+  if (d.show_name === true) out.show_name = true;
+  else delete out.show_name;
+  if (d.show_icon === false) out.show_icon = false;
+  else delete out.show_icon;
+  if (d.info && d.info !== "condition") out.info = d.info;
+  else delete out.info;
+  if (d.forecast && d.forecast !== "auto") out.forecast = d.forecast;
+  else delete out.forecast;
+  if (typeof d.decimals === "number" && d.decimals !== 0) out.decimals = d.decimals;
+  else delete out.decimals;
+  return out;
+}
+
+class SmartGraphWeatherBadgeEditor extends Base {
+  setConfig(config) {
+    this._config = config;
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this._form) this._form.hass = hass;
+  }
+
+  _render() {
+    if (!customElements.get("ha-form")) {
+      this.textContent = "Der visuelle Editor ist nicht verfügbar. Bitte den YAML-Modus verwenden.";
+      return;
+    }
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (s) => LABELS[s.name] ?? s.name;
+      this._form.addEventListener("value-changed", (ev) => {
+        ev.stopPropagation();
+        const next = weatherFromForm(this._config, ev.detail.value);
+        this._config = next;
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
+      });
+      this.append(this._form);
+    }
+    this._form.hass = this._hass;
+    this._form.schema = [
+      { name: "entity", required: true, selector: { entity: { filter: { domain: "weather" } } } },
+      { name: "name", selector: { text: {} } },
+      {
+        type: "grid",
+        name: "",
+        schema: [
+          { name: "show_icon", selector: { boolean: {} } },
+          { name: "show_name", selector: { boolean: {} } },
+        ],
+      },
+      {
+        name: "info",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "condition", label: "Wetterzustand (z. B. Sonnig)" },
+              { value: "high_low", label: "Höchst- / Tiefstwert heute" },
+              { value: "humidity", label: "Luftfeuchtigkeit" },
+              { value: "wind", label: "Wind" },
+              { value: "none", label: "Nichts" },
+            ],
+          },
+        },
+      },
+      {
+        name: "forecast",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "auto", label: "Automatisch (stündlich, sonst täglich)" },
+              { value: "hourly", label: "Vorhersage nächste 24 Stunden" },
+              { value: "daily", label: "Vorhersage nächste Tage" },
+              { value: "none", label: "Kein Verlauf" },
+            ],
+          },
+        },
+      },
+      { name: "decimals", selector: { number: { min: 0, max: 2, mode: "box" } } },
+    ];
+    this._form.data = weatherToForm(this._config);
+  }
+}
+
+function registerWeatherBadge() {
+  if (typeof customElements === "undefined" || customElements.get(WEATHER_TAG)) return;
+  customElements.define(WEATHER_TAG, SmartGraphWeatherBadge);
+  if (!customElements.get(WEATHER_EDITOR_TAG)) customElements.define(WEATHER_EDITOR_TAG, SmartGraphWeatherBadgeEditor);
+  window.customBadges = window.customBadges || [];
+  window.customBadges.push({
+    type: WEATHER_TAG,
+    name: "Smart Graph Weather Badge",
+    description: "Wetter als Badge im Stil der Smart-Graph-Info-Karte: Symbol, Temperatur, Zustand und Vorhersage-Verlauf.",
+    preview: true,
+    documentationURL: "https://github.com/rest2178/smart-graph-button-card",
+  });
+}
+return { WEATHER_TAG, WEATHER_EDITOR_TAG, CONDITIONS, conditionInfo, INFO_MODES, FORECAST_MODES, WeatherConfigError, validateWeatherConfig, forecastType, forecastPoints, infoText, SmartGraphWeatherBadge, weatherToForm, weatherFromForm, SmartGraphWeatherBadgeEditor, registerWeatherBadge };
+})();
+
 // ---- src/contrast.js
 const __m_contrast_js = (() => {
 /**
@@ -6983,12 +7488,13 @@ const { EDITOR_TAG } = __m_smart_graph_button_card_editor_js;
 const { lightColor } = __m_color_utils_js;
 const { registerOverviewCard } = __m_overview_card_js;
 const { registerMediaCard } = __m_media_card_js;
+const { registerWeatherBadge } = __m_weather_badge_js;
 const { resolveLevels, findLevel, ringFraction, TYPE_COLORS, TYPE_ICONS } = __m_levels_js;
 const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = __m_contrast_js;
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.14.1";
+const CARD_VERSION = "1.15.0";
 
 let instanceCounter = 0;
 
@@ -8263,6 +8769,7 @@ if (!customElements.get(CARD_TAG)) {
   });
   registerOverviewCard();
   registerMediaCard();
+  registerWeatherBadge();
   // eslint-disable-next-line no-console
   console.info(`%c SMART-GRAPH-BUTTON-CARD %c v${CARD_VERSION} `, "color:#fff;background:#0ea5e9;font-weight:700;border-radius:3px 0 0 3px", "color:#0ea5e9;background:#e0f2fe;border-radius:0 3px 3px 0");
 }

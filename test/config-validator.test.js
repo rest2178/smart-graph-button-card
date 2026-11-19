@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { validateConfig, ConfigError, DEFAULTS } from "../src/config-validator.js";
 import { validateOverviewConfig } from "../src/overview-card.js";
 import { validateMediaConfig } from "../src/media-card.js";
+import { validateWeatherConfig } from "../src/weather-badge.js";
 
 const base = { type: "custom:smart-graph-button-card", entity: "switch.schreibtisch_1" };
 const throwsWith = (cfg, re) => assert.throws(() => validateConfig(cfg), (e) => e instanceof ConfigError && re.test(e.message));
@@ -65,6 +66,10 @@ test("all spec examples validate", async () => {
       const cfg = parseSimpleYaml(doc);
       const flatten = (c) => (Array.isArray(c.cards) ? c.cards.flatMap(flatten) : [c]);
       for (const card of flatten(cfg)) {
+        if (card.type === "custom:smart-graph-weather-badge") {
+          assert.doesNotThrow(() => validateWeatherConfig(card), `${file}`);
+          continue;
+        }
         if (card.type === "custom:smart-graph-media-card") {
           assert.doesNotThrow(() => validateMediaConfig(card), `${file}`);
           continue;

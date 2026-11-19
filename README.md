@@ -23,8 +23,9 @@ Eine kompakte, frei parametrierbare **Button-Karte für Home Assistant** mit Sym
 | `custom:smart-graph-info-card` | Reine Info-Karte für Messwerte (Temperatur, Luftfeuchtigkeit …): kleines Symbol und Name oben, großer Wert, Verlauf unten. Gleiche Höhe wie der Button, bis zu 4 nebeneinander. Mit `design: tile | ring | compact` als moderne Kachel mit Zustandstext |
 | `custom:smart-graph-overview-card` | Mehrere Sensoren in einer Karte (z. B. Luftqualität): Gesamtbewertung, alle Werte, umschaltbarer Verlauf |
 | `custom:smart-graph-media-card` | Media-Player steuern (Alexa, Sonos, Google Cast, Spotify …): Ein/Aus, Lautstärke, Zurück/Wiedergabe/Weiter und Sender-Tasten |
+| `custom:smart-graph-weather-badge` | **Badge** (Dashboard-Badges, 36 px hoch) für das Wetter im Stil der Info-Karte: Symbol, Temperatur, Zustand, Vorhersage-Verlauf |
 
-Alle vier stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
+Alle stecken in derselben Datei. Es ist nur **eine** Lovelace-Ressource nötig.
 
 ## Inhalt
 
@@ -390,6 +391,31 @@ Ohne `media_content_type` wählt die Karte den passenden Typ nach der Integratio
 | `artwork` | `thumbnail` | Bild des Senders bzw. Covers, solange etwas läuft: `thumbnail` (kleines Bild statt Symbol), `background` (unscharf als Hintergrund der Karte, abgedunkelt bzw. aufgehellt, damit alles lesbar bleibt), `both` (beides), `none` (kein Bild) |
 
 Im visuellen Editor lassen sich Player, Name, Symbol und alle Schalter einstellen. Die Sender-Tasten werden dort ohne YAML gepflegt: „Sender hinzufügen“, je Taste Beschriftung, Symbol, Art (Sender/Inhalt abspielen, Quelle/Favorit des Players – mit Auswahlliste der Quellen –, beliebige Aktion) und die passenden Felder; mit den Pfeilen verschieben, mit dem Papierkorb löschen. Unvollständige Tasten werden in der Karte noch nicht angezeigt. Weitere Beispiele: [examples/media.yaml](examples/media.yaml).
+
+## Wetter-Badge
+
+`custom:smart-graph-weather-badge` ist ein **Badge** (die kleinen Elemente oben im Dashboard bzw. in Abschnitten) in Badge-Höhe (36 px) und im Stil der Info-Karten-Designs: getönter Kreis mit dem Wettersymbol, Temperatur, Zustand und dahinter ein dezenter Verlauf der Vorhersage. Die Akzentfarbe richtet sich nach dem Wetter (Sonne gelb, Regen blau, Schnee hellblau, Gewitter violett, Nacht indigo …).
+
+```yaml
+type: custom:smart-graph-weather-badge
+entity: weather.forecast_home
+# info: condition        # condition | high_low | humidity | wind | none
+# forecast: auto         # auto | hourly | daily | none
+# show_name: false       # Name klein über der Temperatur
+```
+
+| Option | Standard | Beschreibung |
+| --- | --- | --- |
+| `entity` | – | Wetter-Entity (`weather.*`, Pflicht) |
+| `name` | Entity-Name | Eigener Name (bei `show_name: true` sichtbar, sonst als Tooltip) |
+| `show_name` | `false` | Name klein über der Temperatur |
+| `show_icon` | `true` | Wettersymbol im Kreis |
+| `info` | `condition` | Zusatz neben der Temperatur: Wetterzustand, Höchst-/Tiefstwert heute, Luftfeuchtigkeit, Wind oder nichts |
+| `forecast` | `auto` | Verlauf im Hintergrund: Vorhersage der nächsten 24 Stunden (`hourly`), der nächsten Tage (`daily`), automatisch oder keiner |
+| `decimals` | `0` | Nachkommastellen der Temperatur |
+| `color` | nach Wetter | Feste Akzentfarbe |
+
+Tippen öffnet den Wetter-Dialog von Home Assistant. Im Dashboard: Bearbeiten → Badge hinzufügen → „Smart Graph Weather Badge“; alle Optionen sind im visuellen Editor einstellbar.
 
 ## Minimale Konfiguration
 

@@ -18,12 +18,13 @@ import { EDITOR_TAG } from "./smart-graph-button-card-editor.js";
 import { lightColor } from "./color-utils.js";
 import { registerOverviewCard } from "./overview-card.js";
 import { registerMediaCard } from "./media-card.js";
+import { registerWeatherBadge } from "./weather-badge.js";
 import { resolveLevels, findLevel, ringFraction, TYPE_COLORS, TYPE_ICONS } from "./levels.js";
 import { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } from "./contrast.js";
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.14.1";
+export const CARD_VERSION = "1.15.0";
 
 let instanceCounter = 0;
 
@@ -1298,6 +1299,7 @@ if (!customElements.get(CARD_TAG)) {
   });
   registerOverviewCard();
   registerMediaCard();
+  registerWeatherBadge();
   // eslint-disable-next-line no-console
   console.info(`%c SMART-GRAPH-BUTTON-CARD %c v${CARD_VERSION} `, "color:#fff;background:#0ea5e9;font-weight:700;border-radius:3px 0 0 3px", "color:#0ea5e9;background:#e0f2fe;border-radius:0 3px 3px 0");
 }
