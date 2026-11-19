@@ -335,7 +335,7 @@ presets:
     media_content_id: Hitradio Ö3
 ```
 
-**Optionsmenü ⋮ (oben links):** öffnet ein Menü mit dem Untermenü **Playlists**, dem Untermenü **Quellen** (falls der Player Quellen hat) und **Player-Details** (Home-Assistant-Dialog). Die Playlists kommen automatisch aus der Mediathek des Players – bei Playern ohne Mediathek (z. B. Alexa) trägt man sie selbst ein:
+**Optionsmenü ⋮ (oben rechts):** öffnet ein Menü mit dem Untermenü **Playlists**, dem Untermenü **Quellen** (falls der Player Quellen hat) und **Player-Details** (Home-Assistant-Dialog). Die Playlists kommen automatisch aus der Mediathek des Players – bei Playern ohne Mediathek (z. B. Alexa) trägt man sie selbst ein:
 
 ```yaml
 playlists:
@@ -385,7 +385,7 @@ Ohne `media_content_type` wählt die Karte den passenden Typ nach der Integratio
 | `preset_style` | `logo` | Aussehen der Sender-Tasten: `logo` (kleines Bild links neben dem Namen), `tile` (Bild füllt die Taste, Name klein darunter), `text` (nur Name). Tasten ohne Bild zeigen nur den Namen (bei `tile` groß in einer farbigen Fläche) |
 | `preset_show_name` | `true` | Bei `tile`: Namen unter dem Bild zeigen |
 | `preset_auto_image` | `true` | Hat eine Taste kein eigenes Bild, merkt sich die Karte das Senderbild, sobald dieser Sender einmal läuft (im Browser gespeichert). Erkannt wird der Sender am Titel/Sender/der Quelle oder – z. B. bei Alexa, die oft nur das Lied meldet – daran, dass die Taste in der Karte gedrückt wurde |
-| `show_options_menu` | `true` | Optionsmenü ⋮ oben links: Playlists, Quellen, Player-Details |
+| `show_options_menu` | `true` | Optionsmenü ⋮ oben rechts: Playlists, Quellen, Player-Details |
 | `playlists` | `auto` | Untermenü „Playlists“ im Menü ⋮: `auto` sucht in der Mediathek des Players (Medienbrowser von HA, z. B. Sonos, Spotify, Music Assistant), eine Liste wie bei `presets` (z. B. für Alexa / Amazon Music) oder `false` |
 | `artwork` | `thumbnail` | Bild des Senders bzw. Covers, solange etwas läuft: `thumbnail` (kleines Bild statt Symbol), `background` (unscharf als Hintergrund der Karte, abgedunkelt bzw. aufgehellt, damit alles lesbar bleibt), `both` (beides), `none` (kein Bild) |
 

@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.14.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.14.1 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -5484,8 +5484,8 @@ button.ic.power:not(.on):not(:disabled) { color: var(--secondary-text-color); }
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
   border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.2));
 }
-.menu.omenu { left: 8px; right: auto; min-width: 240px; max-height: 340px; }
-button.ic.opt-btn { width: 32px; margin-left: -8px; margin-right: -6px; }
+.menu.omenu { right: 8px; left: auto; min-width: 240px; max-height: 340px; }
+button.ic.opt-btn { width: 32px; margin-left: -8px; margin-right: -8px; }
 button.ic.opt-btn.open { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
 .menu .back { display: flex; align-items: center; gap: 6px; padding: 2px 8px 6px 4px; border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.2)); margin-bottom: 4px; font-weight: 600; font-size: 14px; }
 .menu .back button.ic { width: 34px; height: 34px; --mdc-icon-size: 20px; }
@@ -5864,7 +5864,7 @@ class SmartGraphMediaCard extends Base {
     menuBtn.setAttribute("aria-haspopup", "true");
     menuBtn.setAttribute("aria-expanded", "false");
     const power = iconButton("power", "mdi:power", "Ein/Aus");
-    head.append(optBtn, pIcon, thumb, titles, menuBtn, power);
+    head.append(pIcon, thumb, titles, menuBtn, power, optBtn);
     const menu = el("div", "menu hidden", { role: "menu" });
     const omenu = el("div", "menu omenu hidden", { role: "menu" });
 
@@ -6988,7 +6988,7 @@ const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = 
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.14.0";
+const CARD_VERSION = "1.14.1";
 
 let instanceCounter = 0;
 
