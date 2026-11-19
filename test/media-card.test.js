@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey } from "../src/media-card.js";
+import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
 
 test("config: players, presets, defaults, errors", () => {
   const c = validateMediaConfig({ entity: "media_player.a", entities: ["media_player.b", { entity: "media_player.a" }, { entity: "media_player.c", name: "Küche" }], presets: ["Ö3", { name: "Ö1", source: "Ö1" }] });
@@ -126,4 +126,65 @@ test("preset pictures: config, styles, editor mapping", () => {
   const out = mediaFromForm({ entity: "media_player.a" }, { ...form, preset_style: "logo", preset_auto_image: true });
   assert.equal(out.preset_style, undefined);
   assert.equal(out.preset_auto_image, undefined);
+});
+
+test("pressed preset stays active while the station plays", () => {
+  const pressed = { player: "media_player.a", index: 1, at: 0 };
+  const play = (id) => ({ state: "playing", attributes: { media_title: "Some Song", media_content_id: id } });
+  assert.equal(pressedPreset(pressed, "media_player.a", { state: "idle", attributes: {} }, 3000), 1, "start-up grace");
+  assert.equal(pressedPreset(pressed, "media_player.a", play("s1"), 2000), 1);
+  assert.equal(pressedPreset(pressed, "media_player.a", play("s1"), 6000), 1);
+  assert.equal(pressed.contentId, "s1");
+  assert.equal(pressedPreset(pressed, "media_player.a", play("s1"), 60000), 1, "songs change, station stays");
+  assert.equal(pressedPreset(pressed, "media_player.a", play("other"), 61000), -1, "something else plays");
+  assert.equal(pressedPreset(pressed, "media_player.b", play("s1"), 6000), -1, "other player");
+  assert.equal(pressedPreset({ ...pressed }, "media_player.a", { state: "idle", attributes: {} }, 30000), -1, "stopped");
+  assert.equal(pressedPreset(null, "media_player.a", play("s1"), 1), -1);
+});
+
+test("playlists: config, content type, editor mode", () => {
+  assert.equal(validateMediaConfig({ entity: "media_player.a" }).playlists, "auto");
+  assert.equal(validateMediaConfig({ entity: "media_player.a", playlists: false }).playlists, null);
+  const c = validateMediaConfig({ entity: "media_player.a", playlists: ["Rock Hits", { name: "Chill", media_content_id: "spotify:playlist:1" }, { name: "" }] });
+  assert.deepEqual(c.playlists.map((p) => p.name), ["Rock Hits", "Chill"]);
+  assert.throws(() => validateMediaConfig({ entity: "media_player.a", playlists: "alle" }));
+  assert.equal(validateMediaConfig({ entity: "media_player.a" }).show_options_menu, true);
+  assert.equal(defaultContentType("alexa_media", "Rock Hits", "playlist"), "AMAZON_MUSIC");
+  assert.equal(defaultContentType("music_assistant", "Chill", "playlist"), "playlist");
+  assert.equal(defaultContentType("alexa_media", "Ö3"), "TUNEIN");
+  assert.equal(presetCall({ media_content_id: "Rock Hits" }, "media_player.e", "alexa_media", "playlist").data.media_content_type, "AMAZON_MUSIC");
+  // editor
+  assert.equal(mediaToForm({ entity: "media_player.a" }).playlist_mode, "auto");
+  assert.equal(mediaToForm({ entity: "media_player.a", playlists: [] }).playlist_mode, "list");
+  assert.equal(mediaToForm({ entity: "media_player.a", playlists: false }).playlist_mode, "none");
+  const base = { entity: "media_player.a" };
+  assert.deepEqual(mediaFromForm(base, { ...mediaToForm(base), playlist_mode: "list" }).playlists, []);
+  assert.equal(mediaFromForm(base, { ...mediaToForm(base), playlist_mode: "none" }).playlists, false);
+  assert.equal("playlists" in mediaFromForm({ ...base, playlists: ["x"] }, { ...mediaToForm(base), playlist_mode: "auto" }), false);
+  assert.deepEqual(mediaFromForm({ ...base, playlists: ["x"] }, { ...mediaToForm({ ...base, playlists: ["x"] }) }).playlists, ["x"]);
+});
+
+test("findPlaylists searches the media library", async () => {
+  const tree = {
+    "": { children: [{ title: "Favoriten", can_expand: true, media_content_id: "favs", media_content_type: "favorites" }, { title: "Musikbibliothek", can_expand: true, media_content_id: "lib", media_content_type: "library" }] },
+    favs: { children: [{ title: "Ö1", can_play: true, media_class: "channel", media_content_id: "FV:1", media_content_type: "favorite_item_id" }] },
+    lib: { children: [{ title: "Playlists", can_expand: true, media_content_id: "pl", media_content_type: "playlists" }, { title: "Alben", can_expand: true, media_content_id: "al" }] },
+    pl: { children: [{ title: "Rock", can_play: true, can_expand: true, media_class: "playlist", media_content_id: "S:1", media_content_type: "playlist", thumbnail: "/t/1" }, { title: "Chill", can_play: true, media_class: "directory", media_content_id: "S:2", media_content_type: "playlist" }] },
+  };
+  const calls = [];
+  const browse = async (args) => {
+    calls.push(args.media_content_id || "");
+    const n = tree[args.media_content_id || ""];
+    if (!n) throw new Error("not found");
+    return n;
+  };
+  const found = await findPlaylists(browse);
+  assert.deepEqual(found.map((f) => f.name), ["Rock", "Chill"]);
+  assert.equal(found[0].image, "/t/1");
+  assert.ok(!calls.includes("al") || calls.length <= 8);
+  assert.deepEqual(await findPlaylists(async () => { throw new Error("no browse"); }), []);
+  // helpers
+  assert.equal(playlistItems(tree.favs).length, 0, "favorites are no playlists");
+  assert.equal(playlistItems(tree.favs, true).length, 1, "inside a playlist folder every playable item counts");
+  assert.equal(playlistFolders(tree.lib).length, 1);
 });

@@ -13,6 +13,12 @@ presets:
     media_content_id: Radio Flamingo
   - name: Ö3
     media_content_id: Hitradio Ö3
+# playlists for the ⋮ menu (Alexa has no media library to search)
+playlists:
+  - name: Rock Hits
+    media_content_id: Rock Hits
+  - name: Entspannen
+    media_content_id: Entspannen
 ---
 # Sonos: favorites as source, Cast: stream URL, any player: a script
 type: custom:smart-graph-media-card

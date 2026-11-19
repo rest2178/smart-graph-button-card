@@ -31,6 +31,7 @@ export const FEATURES = Object.freeze({
   SELECT_SOURCE: 2048,
   STOP: 4096,
   PLAY: 16384,
+  BROWSE_MEDIA: 131072,
 });
 
 export function supports(stateObj, feature) {
@@ -107,6 +108,14 @@ export function validateMediaConfig(raw) {
   (Array.isArray(raw.entities) ? raw.entities : []).forEach((e, i) => add(e, `entities[${i}]`));
   if (!players.length && !errors.length) errors.push("entity fehlt: ein media_player wird benötigt.");
   const presets = (Array.isArray(raw.presets) ? raw.presets : []).map((p, i) => normalizePreset(p, i, errors)).filter(Boolean);
+  // playlists: "auto" (media library of the player), a list like presets, or false
+  let playlists = "auto";
+  if (raw.playlists === false || raw.playlists === null) playlists = null;
+  else if (Array.isArray(raw.playlists)) {
+    const pErr = [];
+    playlists = raw.playlists.map((p, i) => normalizePreset(p, i, pErr)).filter(Boolean);
+    errors.push(...pErr.map((e) => e.replace(/^presets/, "playlists")));
+  } else if (raw.playlists !== undefined && raw.playlists !== "auto") errors.push("playlists muss „auto“, false oder eine Liste sein.");
   let columns = raw.preset_columns === undefined ? null : parseNumber(raw.preset_columns);
   if (columns !== null && (!Number.isInteger(columns) || columns < 1 || columns > 6)) errors.push("preset_columns muss 1 bis 6 sein.");
   const presetStyle = raw.preset_style === undefined ? "logo" : raw.preset_style;
@@ -132,6 +141,8 @@ export function validateMediaConfig(raw) {
     preset_show_name: raw.preset_show_name !== false,
     preset_auto_image: raw.preset_auto_image !== false,
     presets,
+    playlists,
+    show_options_menu: flag("show_options_menu"),
     preset_columns: columns,
   };
 }
@@ -151,16 +162,18 @@ export function artworkUrl(stateObj, hass) {
  * media_content_type when a preset only gives media_content_id – chosen by the
  * integration (platform) behind the player.
  */
-export function defaultContentType(platform, id) {
+export function defaultContentType(platform, id, kind = "preset") {
   const s = String(id ?? "");
+  const playlist = kind === "playlist";
   switch (platform) {
     case "alexa_media":
-      return "TUNEIN"; // station name as in the Alexa app, e.g. "Radio Steiermark"
+      // station name as in the Alexa app, e.g. "Radio Steiermark"; playlists from Amazon Music
+      return playlist ? "AMAZON_MUSIC" : "TUNEIN";
     case "sonos":
-      return s.startsWith("FV:") ? "favorite_item_id" : "music";
+      return s.startsWith("FV:") ? "favorite_item_id" : playlist ? "playlist" : "music";
     case "music_assistant":
     case "mass":
-      return URL_RE.test(s) ? "music" : "radio";
+      return URL_RE.test(s) ? "music" : playlist ? "playlist" : "radio";
     case "spotify":
     case "spotifyplus": {
       const m = /^spotify:(playlist|album|artist|track|episode|show):/.exec(s);
@@ -172,7 +185,7 @@ export function defaultContentType(platform, id) {
 }
 
 /** Service call for a preset: { domain, service, data }. */
-export function presetCall(preset, entityId, platform) {
+export function presetCall(preset, entityId, platform, kind = "preset") {
   if (preset.action) {
     const [domain, service] = preset.action.split(".");
     const data = { ...(preset.data || {}) };
@@ -187,7 +200,7 @@ export function presetCall(preset, entityId, platform) {
     data: {
       entity_id: entityId,
       media_content_id: preset.media_content_id,
-      media_content_type: preset.media_content_type || defaultContentType(platform, preset.media_content_id),
+      media_content_type: preset.media_content_type || defaultContentType(platform, preset.media_content_id, kind),
     },
   };
 }
@@ -196,7 +209,7 @@ export function presetCall(preset, entityId, platform) {
 export function activePreset(presets, stateObj) {
   if (!stateObj || !["playing", "paused", "buffering", "on"].includes(stateObj.state)) return -1;
   const a = stateObj.attributes || {};
-  const hay = [a.media_title, a.media_channel, a.media_artist, a.media_album_name, a.source, a.media_content_id]
+  const hay = [a.media_title, a.media_channel, a.media_artist, a.media_album_name, a.media_playlist, a.source, a.media_content_id]
     .filter((v) => v !== undefined && v !== null && v !== "")
     .map((v) => String(v).toLowerCase());
   if (!hay.length) return -1;
@@ -204,6 +217,75 @@ export function activePreset(presets, stateObj) {
     const keys = [p.match, p.source, p.media_content_id, p.name].filter(Boolean).map((v) => String(v).toLowerCase());
     return keys.some((k) => hay.some((h) => h === k || (k.length > 3 && h.includes(k))));
   });
+}
+
+/**
+ * Index of the preset pressed last, as long as it is plausibly still playing:
+ * same player, not switched to something else (media_content_id changed) and
+ * not stopped (a short grace time covers the start-up of the player).
+ * Updates `pressed.contentId` (content seen after the start). Returns -1 otherwise.
+ */
+export function pressedPreset(pressed, player, stateObj, now) {
+  if (!pressed || pressed.player !== player || !stateObj) return -1;
+  const age = now - pressed.at;
+  const running = ["playing", "paused", "buffering", "on"].includes(stateObj.state);
+  if (!running) return age < 20000 ? pressed.index : -1;
+  const id = stateObj.attributes?.media_content_id;
+  if (age > 5000) {
+    if (pressed.contentId === undefined) pressed.contentId = id ?? null;
+    else if (pressed.contentId !== null && id && id !== pressed.contentId) return -1;
+  }
+  return pressed.index;
+}
+
+const PLAYLIST_RE = /playlist|wiedergabeliste/i;
+
+/** Playable playlists among the children of a media browser node. */
+export function playlistItems(node, inPlaylistFolder = false) {
+  return (Array.isArray(node?.children) ? node.children : []).filter(
+    (c) => c && c.can_play && (inPlaylistFolder || c.media_class === "playlist" || PLAYLIST_RE.test(String(c.media_content_type || "")))
+  );
+}
+
+/** Folders that probably contain playlists ("Playlists", "Meine Playlists" …). */
+export function playlistFolders(node) {
+  return (Array.isArray(node?.children) ? node.children : []).filter(
+    (c) => c && c.can_expand && (PLAYLIST_RE.test(String(c.title || "")) || PLAYLIST_RE.test(String(c.media_content_type || "")) || PLAYLIST_RE.test(String(c.media_content_id || "")))
+  );
+}
+
+/**
+ * Search the media library of a player for playlists. `browse(args)` returns a
+ * media browser node (media_player/browse_media). Looks into folders named
+ * like "Playlists" up to two levels deep; at most `maxCalls` requests.
+ */
+export async function findPlaylists(browse, maxCalls = 8) {
+  const found = [];
+  const seen = new Set();
+  const queue = [{ depth: 0, args: {}, inFolder: false }];
+  let calls = 0;
+  while (queue.length && calls < maxCalls && found.length < 60) {
+    const { depth, args, inFolder } = queue.shift();
+    calls += 1;
+    let node;
+    try {
+      node = await browse(args);
+    } catch (_err) {
+      continue;
+    }
+    for (const it of playlistItems(node, inFolder)) {
+      const key = `${it.media_content_type}|${it.media_content_id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      found.push({ name: String(it.title ?? it.media_content_id), media_content_id: it.media_content_id, media_content_type: it.media_content_type, image: it.thumbnail || undefined });
+    }
+    if (depth >= 2) continue;
+    let folders = playlistFolders(node).map((f) => ({ f, inFolder: true }));
+    // nothing named "Playlists" on the top level: look one level into the libraries
+    if (!folders.length && depth === 0) folders = (node?.children || []).filter((ch) => ch?.can_expand).slice(0, 4).map((f) => ({ f, inFolder: false }));
+    for (const { f, inFolder: inF } of folders) queue.push({ depth: depth + 1, args: { media_content_id: f.media_content_id, media_content_type: f.media_content_type }, inFolder: inF });
+  }
+  return found;
 }
 
 export function volumeIcon(level, muted) {
@@ -298,6 +380,15 @@ button.ic.power:not(.on):not(:disabled) { color: var(--secondary-text-color); }
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
   border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.2));
 }
+.menu.omenu { left: 8px; right: auto; min-width: 240px; max-height: 340px; }
+button.ic.opt-btn { width: 32px; margin-left: -8px; margin-right: -6px; }
+button.ic.opt-btn.open { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+.menu .back { display: flex; align-items: center; gap: 6px; padding: 2px 8px 6px 4px; border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.2)); margin-bottom: 4px; font-weight: 600; font-size: 14px; }
+.menu .back button.ic { width: 34px; height: 34px; --mdc-icon-size: 20px; }
+.menu .empty { padding: 10px 16px 12px; font-size: 13px; color: var(--secondary-text-color); line-height: 1.4; }
+.menu button.item .thumb { width: 32px; height: 32px; border-radius: 5px; object-fit: cover; flex: none; background: color-mix(in srgb, var(--primary-text-color) 7%, transparent); }
+.menu button.item .grow { flex: 1 1 auto; min-width: 0; }
+.menu button.item ha-icon.more { color: var(--secondary-text-color); margin-left: auto; }
 .menu .section { padding: 8px 16px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--secondary-text-color); }
 .menu button.item {
   display: flex;
@@ -494,8 +585,9 @@ export class SmartGraphMediaCard extends Base {
 
   connectedCallback() {
     this._outside = (ev) => {
-      if (!this._els?.menu || this._els.menu.classList.contains("hidden")) return;
-      if (!ev.composedPath().includes(this)) this._toggleMenu(false);
+      if (!this._els || ev.composedPath().includes(this)) return;
+      if (!this._els.menu.classList.contains("hidden")) this._toggleMenu(false);
+      if (!this._els.omenu.classList.contains("hidden")) this._toggleOptions(false);
     };
     document.addEventListener("click", this._outside, true);
   }
@@ -614,6 +706,7 @@ export class SmartGraphMediaCard extends Base {
 
   _setCurrent(id) {
     this._current = id;
+    if (this._els) this._toggleOptions(false);
     try {
       localStorage.setItem(this._storageKey(), id);
     } catch (_err) {
@@ -660,12 +753,16 @@ export class SmartGraphMediaCard extends Base {
     const name = el("div", "name");
     const info = el("div", `info${c.show_media_info ? "" : " hidden"}`);
     titles.append(name, info);
+    const optBtn = iconButton(`opt-btn${c.show_options_menu ? "" : " hidden"}`, "mdi:dots-vertical", "Optionen");
+    optBtn.setAttribute("aria-haspopup", "true");
+    optBtn.setAttribute("aria-expanded", "false");
     const menuBtn = iconButton("menu-btn", "mdi:chevron-down", "Player und Quelle wählen");
     menuBtn.setAttribute("aria-haspopup", "true");
     menuBtn.setAttribute("aria-expanded", "false");
     const power = iconButton("power", "mdi:power", "Ein/Aus");
-    head.append(pIcon, thumb, titles, menuBtn, power);
+    head.append(optBtn, pIcon, thumb, titles, menuBtn, power);
     const menu = el("div", "menu hidden", { role: "menu" });
+    const omenu = el("div", "menu omenu hidden", { role: "menu" });
 
     const controls = el("div", "controls");
     const mute = iconButton("mute", "mdi:volume-high", "Stumm schalten");
@@ -715,12 +812,17 @@ export class SmartGraphMediaCard extends Base {
       return { button: b, img };
     });
 
-    card.append(artBg, head, menu, controls, presets);
+    card.append(artBg, head, menu, omenu, controls, presets);
 
     // events
     menuBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      this._toggleOptions(false);
       this._toggleMenu();
+    });
+    optBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this._toggleOptions();
     });
     power.addEventListener("click", () => {
       const s = this._stateObj();
@@ -761,7 +863,7 @@ export class SmartGraphMediaCard extends Base {
       this._call("media_player", supports(s, FEATURES.PAUSE) && supports(s, FEATURES.PLAY) ? "media_play_pause" : service, { entity_id: this._current });
     });
 
-    this._els = { card, pIcon, thumb, artBg, name, info, menuBtn, power, menu, controls, mute, slider, prev, play, next, presets, presetButtons };
+    this._els = { card, optBtn, omenu, pIcon, thumb, artBg, name, info, menuBtn, power, menu, controls, mute, slider, prev, play, next, presets, presetButtons };
   }
 
   _stateObj() {
@@ -787,7 +889,11 @@ export class SmartGraphMediaCard extends Base {
     const p = this._config.presets[i];
     if (!p) return;
     const call = presetCall(p, this._current, this._platform(this._current));
+    // remember the pressed preset: many players (e.g. Alexa with radio) report
+    // the song, not the station – this way highlight and picture still match
+    this._pressed = { player: this._current, index: i, at: Date.now(), artBefore: artworkUrl(this._stateObj(), this._hass) };
     this._call(call.domain, call.service, call.data);
+    this._update();
   }
 
   _playerName(id) {
@@ -808,6 +914,191 @@ export class SmartGraphMediaCard extends Base {
       for (const src of sources) items.push({ kind: "source", value: src, label: String(src), icon: "mdi:music-box-multiple-outline", selected: src === s.attributes.source });
     }
     return items;
+  }
+
+  // ---- options menu (⋮): playlists, sources, player details
+
+  _playlistState() {
+    const c = this._config;
+    if (Array.isArray(c.playlists)) return { items: c.playlists, loading: false, enabled: true };
+    if (c.playlists !== "auto") return { items: [], loading: false, enabled: false };
+    const s = this._stateObj();
+    const cache = this._browseCache?.[this._current];
+    return { items: cache?.items || [], loading: Boolean(cache?.loading), enabled: supports(s, FEATURES.BROWSE_MEDIA), auto: true, done: Boolean(cache?.at) };
+  }
+
+  _loadPlaylists(force) {
+    const c = this._config;
+    const id = this._current;
+    if (c.playlists !== "auto" || !this._hass?.callWS) return;
+    this._browseCache = this._browseCache || {};
+    const cache = this._browseCache[id];
+    if (cache?.loading || (!force && cache?.at && Date.now() - cache.at < 300000)) return;
+    this._browseCache[id] = { items: cache?.items || [], loading: true, at: cache?.at };
+    const browse = (args) => this._hass.callWS({ type: "media_player/browse_media", entity_id: id, ...args });
+    findPlaylists(browse)
+      .catch(() => [])
+      .then((items) => {
+        this._browseCache[id] = { items, loading: false, at: Date.now() };
+        if (this._optView === "playlists" && id === this._current) this._renderOptions();
+      });
+  }
+
+  /** Picture URL for a menu item; HA-internal pictures need a signed path. */
+  _menuImage(img, url) {
+    if (!url) return;
+    if (!url.startsWith("/") || url.startsWith("//") || url.startsWith("/local/") || !this._hass?.callWS) {
+      img.src = url.startsWith("/") && !url.startsWith("//") && typeof this._hass?.hassUrl === "function" ? this._hass.hassUrl(url) : url;
+      return;
+    }
+    this._signed = this._signed || {};
+    const done = (path) => {
+      img.src = typeof this._hass?.hassUrl === "function" ? this._hass.hassUrl(path) : path;
+    };
+    if (this._signed[url]) return done(this._signed[url]);
+    this._hass
+      .callWS({ type: "auth/sign_path", path: url, expires: 3600 })
+      .then((r) => {
+        this._signed[url] = r?.path || url;
+        done(this._signed[url]);
+      })
+      .catch(() => done(url));
+  }
+
+  _menuItem({ label, icon, image, more, selected }, onClick) {
+    const b = el("button", `item${selected ? " selected" : ""}`, { type: "button", role: "menuitem" });
+    if (image !== undefined) {
+      const img = el("img", "thumb", { alt: "", loading: "lazy", decoding: "async" });
+      img.addEventListener("error", () => img.replaceWith(Object.assign(el("ha-icon"), { icon: icon || "mdi:playlist-music" })));
+      this._menuImage(img, image);
+      if (!image) {
+        const ic = el("ha-icon");
+        ic.icon = icon || "mdi:playlist-music";
+        ic.setAttribute("icon", ic.icon);
+        b.append(ic);
+      } else b.append(img);
+    } else if (icon) {
+      const ic = el("ha-icon");
+      ic.icon = selected ? "mdi:check" : icon;
+      ic.setAttribute("icon", ic.icon);
+      b.append(ic);
+    }
+    const span = el("span", "grow");
+    span.textContent = label;
+    b.append(span);
+    if (more) {
+      const m = el("ha-icon", "more");
+      m.icon = "mdi:chevron-right";
+      m.setAttribute("icon", m.icon);
+      b.append(m);
+    }
+    b.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      onClick();
+    });
+    return b;
+  }
+
+  _toggleOptions(force, view = "main") {
+    const els = this._els;
+    if (!els) return;
+    const open = force ?? els.omenu.classList.contains("hidden");
+    if (open) {
+      this._toggleMenu(false);
+      this._optView = view;
+      this._renderOptions();
+    }
+    els.omenu.classList.toggle("hidden", !open);
+    els.optBtn.classList.toggle("open", open);
+    els.optBtn.setAttribute("aria-expanded", String(open));
+  }
+
+  _renderOptions() {
+    const els = this._els;
+    const m = els.omenu;
+    const s = this._stateObj();
+    const view = this._optView || "main";
+    m.replaceChildren();
+    const back = (title) => {
+      const row = el("div", "back");
+      const b = iconButton("", "mdi:arrow-left", "Zurück");
+      b.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this._optView = "main";
+        this._renderOptions();
+      });
+      const t = el("span");
+      t.textContent = title;
+      row.append(b, t);
+      m.append(row);
+    };
+    const sources = Array.isArray(s?.attributes?.source_list) && supports(s, FEATURES.SELECT_SOURCE) ? s.attributes.source_list : [];
+    if (view === "main") {
+      const pl = this._playlistState();
+      if (pl.enabled) {
+        m.append(
+          this._menuItem({ label: "Playlists", icon: "mdi:playlist-music", more: true }, () => {
+            this._optView = "playlists";
+            this._loadPlaylists();
+            this._renderOptions();
+          })
+        );
+      }
+      if (sources.length) {
+        m.append(
+          this._menuItem({ label: "Quellen", icon: "mdi:import", more: true }, () => {
+            this._optView = "sources";
+            this._renderOptions();
+          })
+        );
+      }
+      m.append(
+        this._menuItem({ label: "Player-Details", icon: "mdi:information-outline" }, () => {
+          this._toggleOptions(false);
+          this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: this._current }, bubbles: true, composed: true }));
+        })
+      );
+      return;
+    }
+    if (view === "sources") {
+      back("Quellen");
+      for (const src of sources) {
+        m.append(
+          this._menuItem({ label: String(src), icon: "mdi:music-box-multiple-outline", selected: src === s.attributes.source }, () => {
+            this._toggleOptions(false);
+            this._call("media_player", "select_source", { entity_id: this._current, source: src });
+          })
+        );
+      }
+      return;
+    }
+    // playlists
+    back("Playlists");
+    const pl = this._playlistState();
+    if (pl.loading && !pl.items.length) {
+      const e = el("div", "empty");
+      e.textContent = "Playlists werden geladen …";
+      m.append(e);
+      return;
+    }
+    if (!pl.items.length) {
+      const e = el("div", "empty");
+      e.textContent = pl.auto
+        ? "Keine Playlists in der Mediathek dieses Players gefunden. Eigene Playlists lassen sich im Karten-Editor unter „Playlists“ eintragen."
+        : "Noch keine Playlists eingetragen (Karten-Editor → „Playlists“).";
+      m.append(e);
+      return;
+    }
+    const active = activePreset(pl.items, s);
+    pl.items.forEach((p, i) => {
+      m.append(
+        this._menuItem({ label: p.name, icon: "mdi:playlist-music", image: p.image || "", selected: i === active }, () => {
+          this._toggleOptions(false);
+          const call = presetCall(p, this._current, this._platform(this._current), "playlist");
+          this._call(call.domain, call.service, call.data);
+        })
+      );
+    });
   }
 
   _toggleMenu(force) {
@@ -917,7 +1208,10 @@ export class SmartGraphMediaCard extends Base {
     els.controls.classList.toggle("hidden", [els.mute, els.slider.parentElement, els.prev, els.play, els.next].every((b) => b.classList.contains("hidden")));
 
     // presets
-    const current = activePreset(c.presets, s);
+    const matched = activePreset(c.presets, s);
+    const pressed = matched < 0 ? pressedPreset(this._pressed, this._current, s, Date.now()) : -1;
+    if (matched >= 0 || (this._pressed && pressed < 0)) this._pressed = null;
+    const current = matched >= 0 ? matched : pressed;
     els.presetButtons.forEach(({ button: b }, i) => {
       b.classList.toggle("active", i === current);
       b.setAttribute("aria-pressed", String(i === current));
@@ -926,7 +1220,9 @@ export class SmartGraphMediaCard extends Base {
     // automatic picture: remember the station picture while this preset plays
     if (current >= 0 && c.preset_auto_image && c.preset_style !== "text" && !c.presets[current].image) {
       const art = artworkUrl(s, this._hass);
-      if (art) this._learnPresetImage(current, art);
+      // after pressing a preset wait for the new picture (not the one of the previous station)
+      const stale = pressed >= 0 && (art === this._pressed?.artBefore || Date.now() - this._pressed.at > 120000);
+      if (art && !stale) this._learnPresetImage(current, art);
     }
     this._paintPresetImages();
 
@@ -952,6 +1248,8 @@ const LABELS = {
   preset_style: "Aussehen der Sender-Tasten",
   preset_show_name: "Namen unter dem Bild zeigen",
   preset_auto_image: "Senderbild automatisch übernehmen",
+  show_options_menu: "Optionsmenü ⋮ (Playlists, Quellen)",
+  playlist_mode: "Playlists im Menü ⋮",
 };
 
 const PRESET_LABELS = {
@@ -1081,6 +1379,8 @@ export function mediaToForm(config) {
     show_source_list: c.show_source_list !== false,
     preset_columns: c.preset_columns,
     preset_style: c.preset_style || "logo",
+    show_options_menu: c.show_options_menu !== false,
+    playlist_mode: c.playlists === false || c.playlists === null ? "none" : Array.isArray(c.playlists) ? "list" : "auto",
     preset_show_name: c.preset_show_name !== false,
     preset_auto_image: c.preset_auto_image !== false,
     artwork: c.artwork === false ? "none" : c.artwork === true ? "both" : c.artwork || "thumbnail",
@@ -1106,6 +1406,11 @@ export function mediaFromForm(config, form) {
   }
   if (d.artwork && d.artwork !== "thumbnail") out.artwork = d.artwork;
   else delete out.artwork;
+  if (d.show_options_menu === false) out.show_options_menu = false;
+  else delete out.show_options_menu;
+  if (d.playlist_mode === "none") out.playlists = false;
+  else if (d.playlist_mode === "list") out.playlists = Array.isArray(out.playlists) ? out.playlists : [];
+  else if (d.playlist_mode === "auto") delete out.playlists;
   if (d.preset_style && d.preset_style !== "logo") out.preset_style = d.preset_style;
   else delete out.preset_style;
   for (const k of ["preset_show_name", "preset_auto_image"]) {
@@ -1149,17 +1454,21 @@ export class SmartGraphMediaCardEditor extends Base {
   set hass(hass) {
     this._hass = hass;
     if (this._form) this._form.hass = hass;
-    for (const item of this._presetItems || []) item.form.hass = hass;
+    for (const item of [...(this._listItems?.presets || []), ...(this._listItems?.playlists || [])]) item.form.hass = hass;
   }
 
   _emit(next) {
     this._config = next;
-    this._renderedPresets = JSON.stringify(next.presets || []);
+    this._renderedPresets = this._listsJson(next);
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
   }
 
-  _presets() {
-    return Array.isArray(this._config?.presets) ? this._config.presets : [];
+  _listsJson(c) {
+    return JSON.stringify([c?.presets || [], Array.isArray(c?.playlists) ? c.playlists : null]);
+  }
+
+  _list(key) {
+    return Array.isArray(this._config?.[key]) ? this._config[key] : [];
   }
 
   _sources() {
@@ -1168,12 +1477,12 @@ export class SmartGraphMediaCardEditor extends Base {
     return Array.isArray(list) ? list.map(String) : [];
   }
 
-  _setPresets(list, rebuild) {
+  _setList(key, list, rebuild) {
     const next = { ...this._config };
-    if (list.length) next.presets = list;
-    else delete next.presets;
+    if (list.length || key === "playlists") next[key] = list;
+    else delete next[key];
     this._emit(next);
-    if (rebuild) this._renderPresets();
+    if (rebuild) this._renderLists();
   }
 
   _render() {
@@ -1188,11 +1497,17 @@ export class SmartGraphMediaCardEditor extends Base {
       this._form.computeLabel = (s) => LABELS[s.name] ?? s.name;
       this._form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
+        const listShown = (c) => Array.isArray(c?.playlists) && c.show_options_menu !== false;
+        const before = listShown(this._config);
         this._emit(mediaFromForm(this._config, ev.detail.value));
+        // playlist mode switched → show / hide the playlist list
+        if (listShown(this._config) !== before) this._renderLists();
       });
       this._presetBox = document.createElement("div");
       this._presetBox.className = "sgmc-ed-presets";
-      this.append(style, this._form, this._presetBox);
+      this._playlistBox = document.createElement("div");
+      this._playlistBox.className = "sgmc-ed-presets";
+      this.append(style, this._form, this._presetBox, this._playlistBox);
     }
     this._form.hass = this._hass;
     this._form.schema = [
@@ -1231,6 +1546,24 @@ export class SmartGraphMediaCardEditor extends Base {
           },
         },
       },
+      { name: "show_options_menu", selector: { boolean: {} } },
+      ...(this._config?.show_options_menu === false
+        ? []
+        : [
+            {
+              name: "playlist_mode",
+              selector: {
+                select: {
+                  mode: "dropdown",
+                  options: [
+                    { value: "auto", label: "Automatisch aus der Mediathek des Players" },
+                    { value: "list", label: "Eigene Liste (z. B. für Alexa / Amazon Music)" },
+                    { value: "none", label: "Keine Playlists" },
+                  ],
+                },
+              },
+            },
+          ]),
       { name: "preset_columns", selector: { number: { min: 1, max: 6, mode: "box" } } },
       {
         name: "preset_style",
@@ -1256,8 +1589,7 @@ export class SmartGraphMediaCardEditor extends Base {
     ];
     this._form.data = mediaToForm(this._config);
     // the list is only rebuilt when the presets changed from outside (YAML mode, undo)
-    const json = JSON.stringify(this._presets());
-    if (json !== this._renderedPresets) this._renderPresets();
+    if (this._listsJson(this._config) !== this._renderedPresets) this._renderLists();
   }
 
   _button(icon, label, className, onClick) {
@@ -1274,48 +1606,64 @@ export class SmartGraphMediaCardEditor extends Base {
     return b;
   }
 
-  _renderPresets() {
-    const box = this._presetBox;
+  _renderLists() {
+    this._renderedPresets = this._listsJson(this._config);
+    this._listItems = {};
+    this._renderList("presets", this._presetBox, {
+      title: "Sender / Favoriten",
+      hint: "Jede Taste spielt einen Sender oder Inhalt ab, wählt eine Quelle des Players oder startet eine Aktion.",
+      add: "Sender hinzufügen",
+      item: "Taste",
+    });
+    if (Array.isArray(this._config?.playlists) && this._config.show_options_menu !== false) {
+      this._renderList("playlists", this._playlistBox, {
+        title: "Playlists (Menü ⋮)",
+        hint: "Alexa: Name der Playlist aus Amazon Music (Typ AMAZON_MUSIC wird automatisch gewählt). Spotify: spotify:playlist:… Andere: ID oder URL.",
+        add: "Playlist hinzufügen",
+        item: "Playlist",
+      });
+    } else if (this._playlistBox) this._playlistBox.replaceChildren();
+  }
+
+  _renderList(key, box, text) {
     if (!box) return;
-    const presets = this._presets();
-    this._renderedPresets = JSON.stringify(presets);
+    const entries = this._list(key);
     box.replaceChildren();
     const title = document.createElement("div");
     title.className = "sgmc-ed-title";
-    title.textContent = "Sender / Favoriten";
+    title.textContent = text.title;
     const hint = document.createElement("div");
     hint.className = "sgmc-ed-hint";
-    hint.textContent = "Jede Taste spielt einen Sender oder Inhalt ab, wählt eine Quelle des Players oder startet eine Aktion.";
+    hint.textContent = text.hint;
     box.append(title, hint);
     const sources = this._sources();
-    this._presetItems = presets.map((preset, i) => {
+    this._listItems[key] = entries.map((entry, i) => {
       const wrap = document.createElement("div");
       wrap.className = "sgmc-ed-item";
       const head = document.createElement("div");
       head.className = "sgmc-ed-head";
       const label = document.createElement("span");
       label.className = "label";
-      const data = presetToForm(preset);
-      label.textContent = data.name || `Taste ${i + 1}`;
+      const data = presetToForm(entry);
+      label.textContent = data.name || `${text.item} ${i + 1}`;
       const move = (dir) => {
-        const list = [...this._presets()];
+        const list = [...this._list(key)];
         const j = i + dir;
         [list[i], list[j]] = [list[j], list[i]];
-        this._setPresets(list, true);
+        this._setList(key, list, true);
       };
       const up = this._button("mdi:arrow-up", "Nach oben", "", () => move(-1));
       const down = this._button("mdi:arrow-down", "Nach unten", "", () => move(1));
       up.disabled = i === 0;
-      down.disabled = i === presets.length - 1;
-      const del = this._button("mdi:delete-outline", "Taste löschen", "delete", () => {
-        const list = this._presets().filter((_, k) => k !== i);
-        this._setPresets(list, true);
+      down.disabled = i === entries.length - 1;
+      const del = this._button("mdi:delete-outline", `${text.item} löschen`, "delete", () => {
+        this._setList(key, this._list(key).filter((_, k) => k !== i), true);
       });
       head.append(label, up, down, del);
       const form = document.createElement("ha-form");
       form.hass = this._hass;
-      form.computeLabel = (s) => PRESET_LABELS[s.name] ?? s.name;
-      form.computeHelper = (s) => PRESET_HELPERS[s.name];
+      form.computeLabel = (sch) => PRESET_LABELS[sch.name] ?? sch.name;
+      form.computeHelper = (sch) => PRESET_HELPERS[sch.name];
       form.schema = presetSchema(data.kind, sources);
       form.data = data;
       form.addEventListener("value-changed", (ev) => {
@@ -1323,10 +1671,10 @@ export class SmartGraphMediaCardEditor extends Base {
         const value = ev.detail.value || {};
         const kindChanged = value.kind !== form.data?.kind;
         const next = presetFromForm({ ...value, _image_upload_before: form.data?.image_upload });
-        const list = [...this._presets()];
+        const list = [...this._list(key)];
         list[i] = next;
-        this._setPresets(list, false);
-        label.textContent = next.name || `Taste ${i + 1}`;
+        this._setList(key, list, false);
+        label.textContent = next.name || `${text.item} ${i + 1}`;
         // other kind → other fields
         if (kindChanged) form.schema = presetSchema(value.kind, sources);
         form.data = presetToForm(next);
@@ -1341,8 +1689,8 @@ export class SmartGraphMediaCardEditor extends Base {
     const plus = document.createElement("ha-icon");
     plus.icon = "mdi:plus";
     plus.setAttribute("icon", "mdi:plus");
-    add.append(plus, document.createTextNode("Sender hinzufügen"));
-    add.addEventListener("click", () => this._setPresets([...this._presets(), { name: "", media_content_id: "" }], true));
+    add.append(plus, document.createTextNode(text.add));
+    add.addEventListener("click", () => this._setList(key, [...this._list(key), { name: "", media_content_id: "" }], true));
     box.append(add);
   }
 }

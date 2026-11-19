@@ -335,9 +335,22 @@ presets:
     media_content_id: Hitradio Ö3
 ```
 
+**Optionsmenü ⋮ (oben links):** öffnet ein Menü mit dem Untermenü **Playlists**, dem Untermenü **Quellen** (falls der Player Quellen hat) und **Player-Details** (Home-Assistant-Dialog). Die Playlists kommen automatisch aus der Mediathek des Players – bei Playern ohne Mediathek (z. B. Alexa) trägt man sie selbst ein:
+
+```yaml
+playlists:
+  - name: Rock Hits
+    media_content_id: Rock Hits          # Alexa: Name der Amazon-Music-Playlist (Typ AMAZON_MUSIC automatisch)
+  - name: Chill
+    media_content_id: spotify:playlist:37i9dQZF1DX4WYpdgoIcn6
+    image: /local/covers/chill.jpg
+```
+
+Im Editor: „Playlists im Menü ⋮“ → automatisch, eigene Liste (dann erscheint eine Liste wie bei den Sender-Tasten) oder keine.
+
 Unter dem Namen steht, was gerade läuft (Titel · Interpret bzw. Sender), sonst der Zustand. Das Bild des Senders oder Covers erscheint je nach `artwork` als kleines Bild oben links, als Hintergrund oder beides.
 
-Tasten, die der Player nicht unterstützt (`supported_features`), werden ausgeblendet; ist der Player nicht verfügbar, sind alle Bedienelemente gesperrt. Der laufende Sender wird hervorgehoben (Vergleich mit Titel, Sender und Quelle; mit `match: …` lässt sich ein eigener Suchtext angeben). Der zuletzt gewählte Player bleibt im Browser gespeichert.
+Tasten, die der Player nicht unterstützt (`supported_features`), werden ausgeblendet; ist der Player nicht verfügbar, sind alle Bedienelemente gesperrt. Der laufende Sender wird hervorgehoben (Vergleich mit Titel, Sender und Quelle; mit `match: …` lässt sich ein eigener Suchtext angeben). Meldet der Player nur das laufende Lied, bleibt die zuletzt gedrückte Taste hervorgehoben, bis etwas anderes läuft oder die Wiedergabe endet. Der zuletzt gewählte Player bleibt im Browser gespeichert.
 
 **Sender-Tasten (`presets`)** – drei Arten:
 
@@ -371,7 +384,9 @@ Ohne `media_content_type` wählt die Karte den passenden Typ nach der Integratio
 | `show_source_list` | `true` | Quellen des Players im Menü ▾ |
 | `preset_style` | `logo` | Aussehen der Sender-Tasten: `logo` (kleines Bild links neben dem Namen), `tile` (Bild füllt die Taste, Name klein darunter), `text` (nur Name). Tasten ohne Bild zeigen nur den Namen (bei `tile` groß in einer farbigen Fläche) |
 | `preset_show_name` | `true` | Bei `tile`: Namen unter dem Bild zeigen |
-| `preset_auto_image` | `true` | Hat eine Taste kein eigenes Bild, merkt sich die Karte das Senderbild, sobald dieser Sender einmal läuft (im Browser gespeichert) |
+| `preset_auto_image` | `true` | Hat eine Taste kein eigenes Bild, merkt sich die Karte das Senderbild, sobald dieser Sender einmal läuft (im Browser gespeichert). Erkannt wird der Sender am Titel/Sender/der Quelle oder – z. B. bei Alexa, die oft nur das Lied meldet – daran, dass die Taste in der Karte gedrückt wurde |
+| `show_options_menu` | `true` | Optionsmenü ⋮ oben links: Playlists, Quellen, Player-Details |
+| `playlists` | `auto` | Untermenü „Playlists“ im Menü ⋮: `auto` sucht in der Mediathek des Players (Medienbrowser von HA, z. B. Sonos, Spotify, Music Assistant), eine Liste wie bei `presets` (z. B. für Alexa / Amazon Music) oder `false` |
 | `artwork` | `thumbnail` | Bild des Senders bzw. Covers, solange etwas läuft: `thumbnail` (kleines Bild statt Symbol), `background` (unscharf als Hintergrund der Karte, abgedunkelt bzw. aufgehellt, damit alles lesbar bleibt), `both` (beides), `none` (kein Bild) |
 
 Im visuellen Editor lassen sich Player, Name, Symbol und alle Schalter einstellen. Die Sender-Tasten werden dort ohne YAML gepflegt: „Sender hinzufügen“, je Taste Beschriftung, Symbol, Art (Sender/Inhalt abspielen, Quelle/Favorit des Players – mit Auswahlliste der Quellen –, beliebige Aktion) und die passenden Felder; mit den Pfeilen verschieben, mit dem Papierkorb löschen. Unvollständige Tasten werden in der Karte noch nicht angezeigt. Weitere Beispiele: [examples/media.yaml](examples/media.yaml).
