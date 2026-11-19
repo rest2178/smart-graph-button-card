@@ -53,6 +53,13 @@ export class MediaConfigError extends Error {}
 
 /** thumbnail: cover instead of the symbol; background: blurred cover behind the card; both; none. */
 export const ARTWORK_MODES = ["thumbnail", "background", "both", "none"];
+/** Preset buttons: logo (small picture + name), tile (picture fills the button), text (name only). */
+export const PRESET_STYLES = ["logo", "tile", "text"];
+
+/** Key under which an automatically learned preset picture is stored. */
+export function presetImageKey(players, preset) {
+  return `sgmc-img:${players[0] || ""}:${preset.media_content_id ?? preset.source ?? preset.action ?? ""}:${preset.name}`;
+}
 
 function normalizePreset(p, i, errors) {
   if (typeof p === "string" || typeof p === "number") return { name: String(p), media_content_id: String(p) };
@@ -63,17 +70,21 @@ function normalizePreset(p, i, errors) {
   const out = { ...p };
   const action = p.action ?? p.perform_action ?? p.service;
   if (action !== undefined) {
+    if (action === "") return null;
     if (typeof action !== "string" || !SERVICE_RE.test(action)) errors.push(`presets[${i}].action „${action}“ ist ungültig (z. B. script.radio_an).`);
     out.action = action;
     delete out.perform_action;
     delete out.service;
     if (out.data !== undefined && !isPlainObject(out.data)) errors.push(`presets[${i}].data muss ein Objekt sein.`);
-  } else if (p.source === undefined && (p.media_content_id === undefined || p.media_content_id === "")) {
-    errors.push(`presets[${i}] braucht „media_content_id“, „source“ oder „action“.`);
+  } else if ((p.source === undefined || p.source === "") && (p.media_content_id === undefined || p.media_content_id === "")) {
+    return null; // still incomplete (e.g. just added in the editor) – not shown
   }
   if (out.media_content_id !== undefined) out.media_content_id = String(out.media_content_id);
   if (out.source !== undefined) out.source = String(out.source);
   out.name = String(p.name ?? p.source ?? p.media_content_id ?? action ?? "");
+  if (out.image !== undefined && out.image !== null && out.image !== "") {
+    if (typeof out.image !== "string" || /["\\\n<>]/.test(out.image)) errors.push(`presets[${i}].image muss eine Bildadresse sein (z. B. /local/logos/oe3.png).`);
+  } else delete out.image;
   return out;
 }
 
@@ -98,6 +109,8 @@ export function validateMediaConfig(raw) {
   const presets = (Array.isArray(raw.presets) ? raw.presets : []).map((p, i) => normalizePreset(p, i, errors)).filter(Boolean);
   let columns = raw.preset_columns === undefined ? null : parseNumber(raw.preset_columns);
   if (columns !== null && (!Number.isInteger(columns) || columns < 1 || columns > 6)) errors.push("preset_columns muss 1 bis 6 sein.");
+  const presetStyle = raw.preset_style === undefined ? "logo" : raw.preset_style;
+  if (!PRESET_STYLES.includes(presetStyle)) errors.push(`preset_style „${raw.preset_style}“ ist ungültig. Erlaubt: ${PRESET_STYLES.join(", ")}.`);
   const artwork = raw.artwork === undefined ? "thumbnail" : raw.artwork === false ? "none" : raw.artwork === true ? "both" : raw.artwork;
   if (!ARTWORK_MODES.includes(artwork)) errors.push(`artwork „${raw.artwork}“ ist ungültig. Erlaubt: ${ARTWORK_MODES.join(", ")}.`);
   if (errors.length) throw new MediaConfigError(errors.join("\n"));
@@ -115,6 +128,9 @@ export function validateMediaConfig(raw) {
     show_media_info: flag("show_media_info"),
     show_source_list: flag("show_source_list"),
     artwork,
+    preset_style: presetStyle,
+    preset_show_name: raw.preset_show_name !== false,
+    preset_auto_image: raw.preset_auto_image !== false,
     presets,
     preset_columns: columns,
   };
@@ -365,6 +381,40 @@ button.preset.active {
   background: color-mix(in srgb, var(--sgmc-active) 10%, var(--card-background-color, #fff));
 }
 button.preset ha-icon { --mdc-icon-size: 18px; margin-right: 6px; vertical-align: -3px; }
+button.preset .p-img { display: none; object-fit: cover; flex: none; background: color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
+button.preset .p-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* logo: small picture left of the name */
+.presets.style-logo button.preset.has-img { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 6px 0 5px; }
+.presets.style-logo button.preset.has-img .p-img { display: block; width: 28px; height: 28px; border-radius: 5px; }
+.presets.style-logo button.preset.has-img ha-icon { display: none; }
+/* tile: picture fills the button, name small below */
+.presets.style-tile { gap: 12px; }
+.presets.style-tile button.preset { height: auto; padding: 0; display: flex; flex-direction: column; align-items: stretch; border-radius: 10px; overflow: hidden; }
+.presets.style-tile button.preset .p-art {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  box-sizing: border-box;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: normal;
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--sgmc-active) 12%, var(--card-background-color, #fff));
+  color: var(--sgmc-active);
+}
+.presets.style-tile button.preset .p-art ha-icon { --mdc-icon-size: 28px; margin: 0; }
+.presets.style-tile button.preset.has-img .p-art { padding: 0; background: color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
+.presets.style-tile button.preset.has-img .p-art > :not(.p-img) { display: none; }
+.presets.style-tile button.preset .p-img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.presets.style-tile button.preset.has-img .p-img { display: block; }
+.presets.style-tile button.preset .p-name { padding: 6px 8px 7px; font-size: 12px; text-align: center; }
+.presets.style-tile.no-name button.preset .p-name { display: none; }
+.presets.style-tile button.preset.active { box-shadow: 0 0 0 2px var(--sgmc-active), 0 1px 3px rgba(0, 0, 0, 0.22); }
 .warn { padding: 12px 16px; color: var(--error-color, #db4437); font-size: 13px; white-space: pre-line; }
 `;
 
@@ -455,6 +505,98 @@ export class SmartGraphMediaCard extends Base {
     clearTimeout(this._volTimer);
   }
 
+  _presetImage(i) {
+    const c = this._config;
+    const p = c.presets[i];
+    if (!p || c.preset_style === "text") return { src: null };
+    if (p.image) return { src: typeof this._hass?.hassUrl === "function" && p.image.startsWith("/") && !p.image.startsWith("//") ? this._hass.hassUrl(p.image) : p.image };
+    if (!c.preset_auto_image) return { src: null };
+    try {
+      const v = localStorage.getItem(presetImageKey(c.players, p));
+      return { src: v || null, auto: true };
+    } catch (_err) {
+      return { src: null };
+    }
+  }
+
+  _paintPresetImages() {
+    (this._els?.presetButtons || []).forEach(({ button, img }, i) => {
+      const { src, auto } = this._presetImage(i);
+      if (!src) {
+        button.classList.remove("has-img");
+        if (img.hasAttribute("src")) img.removeAttribute("src");
+        return;
+      }
+      if (auto) img.dataset.auto = "1";
+      else delete img.dataset.auto;
+      if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+      else if (img.complete && img.naturalWidth) button.classList.add("has-img");
+    });
+  }
+
+  _forgetPresetImage(i) {
+    try {
+      localStorage.removeItem(presetImageKey(this._config.players, this._config.presets[i]));
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Store the picture of the playing station for preset i. Pictures from Home
+   * Assistant (media proxy with a rotating token) are copied as a small data
+   * URL; pictures from other servers are stored as their address.
+   */
+  _learnPresetImage(i, url) {
+    const c = this._config;
+    const key = presetImageKey(c.players, c.presets[i]);
+    try {
+      if (localStorage.getItem(key) || this._learning?.[key]) return;
+    } catch (_err) {
+      return;
+    }
+    this._learning = { ...(this._learning || {}), [key]: true };
+    const done = (value) => {
+      if (this._learning) delete this._learning[key];
+      if (!value) return;
+      try {
+        localStorage.setItem(key, value);
+      } catch (_err) {
+        /* storage full or blocked */
+      }
+      this._paintPresetImages();
+    };
+    let sameOrigin = false;
+    try {
+      sameOrigin = new URL(url, location.href).origin === location.origin;
+    } catch (_err) {
+      sameOrigin = false;
+    }
+    if (!sameOrigin) {
+      done(url);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const size = 160;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const scale = Math.max(size / img.naturalWidth, size / img.naturalHeight);
+        const w = img.naturalWidth * scale;
+        const h = img.naturalHeight * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        done(canvas.toDataURL("image/jpeg", 0.85));
+      } catch (_err) {
+        done(null);
+      }
+    };
+    img.onerror = () => done(null);
+    img.src = url;
+  }
+
   _storageKey() {
     return this._config ? `sgmc:${this._config.players.join(",")}` : null;
   }
@@ -537,20 +679,40 @@ export class SmartGraphMediaCard extends Base {
     transport.append(prev, play, next);
     controls.append(mute, vol, transport);
 
-    const presets = el("div", `presets${c.presets.length ? "" : " hidden"}`);
+    const presets = el("div", `presets style-${c.preset_style}${c.preset_show_name ? "" : " no-name"}${c.presets.length ? "" : " hidden"}`);
     presets.style.setProperty("--sgmc-cols", String(c.preset_columns));
     const presetButtons = c.presets.map((p, i) => {
-      const b = el("button", "preset", { type: "button", title: p.name });
-      if (p.icon) {
+      const b = el("button", "preset", { type: "button", title: p.name, "aria-label": p.name });
+      const img = el("img", "p-img", { alt: "", loading: "lazy", decoding: "async" });
+      img.addEventListener("error", () => {
+        // picture not loadable: forget a learned one, show the button without it
+        if (img.dataset.auto) this._forgetPresetImage(i);
+        b.classList.remove("has-img");
+        img.removeAttribute("src");
+      });
+      img.addEventListener("load", () => b.classList.add("has-img"));
+      const icon = () => {
         const ic = el("ha-icon");
         ic.icon = p.icon;
         ic.setAttribute("icon", p.icon);
-        b.append(ic);
+        return ic;
+      };
+      const name = el("span", "p-name");
+      name.textContent = p.name;
+      if (c.preset_style === "tile") {
+        const art = el("span", "p-art");
+        art.append(img);
+        if (p.icon) art.append(icon());
+        else art.append(document.createTextNode(p.name));
+        b.append(art, name);
+      } else {
+        b.append(img);
+        if (p.icon) b.append(icon());
+        b.append(name);
       }
-      b.append(document.createTextNode(p.name));
       b.addEventListener("click", () => this._playPreset(i));
       presets.append(b);
-      return b;
+      return { button: b, img };
     });
 
     card.append(artBg, head, menu, controls, presets);
@@ -756,11 +918,17 @@ export class SmartGraphMediaCard extends Base {
 
     // presets
     const current = activePreset(c.presets, s);
-    els.presetButtons.forEach((b, i) => {
+    els.presetButtons.forEach(({ button: b }, i) => {
       b.classList.toggle("active", i === current);
       b.setAttribute("aria-pressed", String(i === current));
       b.disabled = unavailable;
     });
+    // automatic picture: remember the station picture while this preset plays
+    if (current >= 0 && c.preset_auto_image && c.preset_style !== "text" && !c.presets[current].image) {
+      const art = artworkUrl(s, this._hass);
+      if (art) this._learnPresetImage(current, art);
+    }
+    this._paintPresetImages();
 
     // the open menu follows source / player changes
     if (!els.menu.classList.contains("hidden")) this._toggleMenu(true);
@@ -781,8 +949,122 @@ const LABELS = {
   show_source_list: "Quellen im Menü ▾",
   artwork: "Bild des Senders / Covers",
   preset_columns: "Spalten der Sender-Tasten",
-  presets: "Sender / Favoriten (YAML)",
+  preset_style: "Aussehen der Sender-Tasten",
+  preset_show_name: "Namen unter dem Bild zeigen",
+  preset_auto_image: "Senderbild automatisch übernehmen",
 };
+
+const PRESET_LABELS = {
+  name: "Beschriftung",
+  icon: "Symbol (optional)",
+  kind: "Art",
+  media_content_id: "Sender / Inhalt",
+  media_content_type: "Typ (leer = automatisch)",
+  source: "Quelle / Favorit",
+  action: "Aktion (Dienst)",
+  data: "Daten (optional)",
+  match: "Erkennen am Text (optional)",
+  image: "Bild (Adresse, optional)",
+  image_upload: "Bild hochladen",
+};
+
+const PRESET_HELPERS = {
+  media_content_id: "Alexa: Sendername wie in der Alexa-App (z. B. Radio Steiermark). Andere: Stream-URL, Spotify-URI oder ID.",
+  media_content_type: "Alexa: TUNEIN (Standard), AMAZON_MUSIC oder custom (Sprachbefehl). Sonos: favorite_item_id. Music Assistant: radio.",
+  action: "z. B. script.radio_morgens oder media_player.volume_set",
+  data: "entity_id: current = der in der Karte gewählte Player",
+  image: "Logo oder Cover: /local/logos/oe3.png (Ordner www), eine Internet-Adresse oder hochladen. Leer = automatisch, sobald der Sender einmal läuft.",
+  match: "Hebt die Taste hervor, wenn dieser Text im Titel, Sender oder in der Quelle vorkommt.",
+};
+
+const PRESET_KINDS = [
+  { value: "media", label: "Sender / Inhalt abspielen" },
+  { value: "source", label: "Quelle / Favorit des Players" },
+  { value: "action", label: "Beliebige Aktion (Skript, Dienst)" },
+];
+
+const CONTENT_TYPES = ["TUNEIN", "AMAZON_MUSIC", "custom", "music", "radio", "playlist", "favorite_item_id", "url"];
+
+/** Preset (string or object from YAML) → flat editor data. */
+export function presetToForm(preset) {
+  const p = typeof preset === "string" || typeof preset === "number" ? { name: String(preset), media_content_id: String(preset) } : isPlainObject(preset) ? preset : {};
+  const action = p.action ?? p.perform_action ?? p.service;
+  const kind = action !== undefined ? "action" : p.source !== undefined ? "source" : "media";
+  const f = { kind, name: p.name ?? "" };
+  if (p.icon) f.icon = p.icon;
+  if (p.image) {
+    f.image = p.image;
+    if (String(p.image).startsWith("/api/image/serve/")) f.image_upload = p.image;
+  }
+  if (p.match) f.match = p.match;
+  if (kind === "action") {
+    f.action = action;
+    if (isPlainObject(p.data)) f.data = p.data;
+  } else if (kind === "source") f.source = p.source === undefined ? "" : String(p.source);
+  else {
+    f.media_content_id = p.media_content_id === undefined ? "" : String(p.media_content_id);
+    if (p.media_content_type) f.media_content_type = p.media_content_type;
+  }
+  return f;
+}
+
+/** Flat editor data → preset object (only the keys of the chosen kind). */
+export function presetFromForm(f) {
+  const d = f || {};
+  const out = {};
+  const name = typeof d.name === "string" ? d.name.trim() : "";
+  if (name) out.name = name;
+  if (d.icon) out.icon = d.icon;
+  // a new upload replaces the address field
+  let image = d.image_upload && d.image_upload !== d._image_upload_before ? d.image_upload : d.image;
+  // upload removed → also drop its address
+  if (!d.image_upload && d._image_upload_before && image === d._image_upload_before) image = "";
+  if (typeof image === "string" && image.trim()) out.image = image.trim();
+  if (d.kind === "action") {
+    out.action = d.action || "";
+    if (isPlainObject(d.data) && Object.keys(d.data).length) out.data = d.data;
+  } else if (d.kind === "source") out.source = d.source ?? "";
+  else {
+    out.media_content_id = d.media_content_id ?? "";
+    if (d.media_content_type) out.media_content_type = d.media_content_type;
+  }
+  if (typeof d.match === "string" && d.match.trim()) out.match = d.match.trim();
+  return out;
+}
+
+export function presetSchema(kind, sources) {
+  const value =
+    kind === "action"
+      ? [
+          { name: "action", selector: { text: {} } },
+          { name: "data", selector: { object: {} } },
+        ]
+      : kind === "source"
+        ? [
+            sources.length
+              ? { name: "source", selector: { select: { mode: "dropdown", custom_value: true, options: sources.map((v) => ({ value: v, label: v })) } } }
+              : { name: "source", selector: { text: {} } },
+          ]
+        : [
+            { name: "media_content_id", selector: { text: {} } },
+            { name: "media_content_type", selector: { select: { mode: "dropdown", custom_value: true, options: CONTENT_TYPES.map((v) => ({ value: v, label: v })) } } },
+          ];
+  return [
+    {
+      type: "grid",
+      name: "",
+      schema: [
+        { name: "name", selector: { text: {} } },
+        { name: "icon", selector: { icon: {} } },
+      ],
+    },
+    { name: "kind", selector: { select: { mode: "dropdown", options: PRESET_KINDS } } },
+    ...value,
+    { name: "image", selector: { text: {} } },
+    { name: "image_upload", selector: { image: {} } },
+    { name: "match", selector: { text: {} } },
+  ];
+}
 
 export function mediaToForm(config) {
   const c = config || {};
@@ -798,11 +1080,14 @@ export function mediaToForm(config) {
     show_media_info: c.show_media_info !== false,
     show_source_list: c.show_source_list !== false,
     preset_columns: c.preset_columns,
+    preset_style: c.preset_style || "logo",
+    preset_show_name: c.preset_show_name !== false,
+    preset_auto_image: c.preset_auto_image !== false,
     artwork: c.artwork === false ? "none" : c.artwork === true ? "both" : c.artwork || "thumbnail",
-    presets: Array.isArray(c.presets) ? c.presets : [],
   };
 }
 
+/** Main form → config. Presets are edited in their own list and kept as they are. */
 export function mediaFromForm(config, form) {
   const out = { ...(config || {}) };
   const d = form || {};
@@ -821,12 +1106,39 @@ export function mediaFromForm(config, form) {
   }
   if (d.artwork && d.artwork !== "thumbnail") out.artwork = d.artwork;
   else delete out.artwork;
+  if (d.preset_style && d.preset_style !== "logo") out.preset_style = d.preset_style;
+  else delete out.preset_style;
+  for (const k of ["preset_show_name", "preset_auto_image"]) {
+    if (d[k] === false) out[k] = false;
+    else delete out[k];
+  }
   if (typeof d.preset_columns === "number") out.preset_columns = d.preset_columns;
   else delete out.preset_columns;
-  if (Array.isArray(d.presets) && d.presets.length) out.presets = d.presets;
-  else delete out.presets;
   return out;
 }
+
+const EDITOR_STYLES = `
+.sgmc-ed-presets { margin-top: 20px; }
+.sgmc-ed-title { font-size: 15px; font-weight: 500; margin: 0 0 4px; }
+.sgmc-ed-hint { font-size: 12px; color: var(--secondary-text-color); margin: 0 0 10px; }
+.sgmc-ed-item { border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3)); border-radius: 12px; padding: 4px 12px 12px; margin-bottom: 10px; }
+.sgmc-ed-head { display: flex; align-items: center; gap: 4px; min-height: 40px; }
+.sgmc-ed-head .label { flex: 1 1 auto; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sgmc-ed-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--primary-text-color); cursor: pointer; --mdc-icon-size: 20px;
+}
+.sgmc-ed-btn:hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+.sgmc-ed-btn:disabled { color: var(--disabled-text-color, #9ca3af); cursor: default; background: transparent; }
+.sgmc-ed-btn.delete { color: var(--error-color, #db4437); }
+.sgmc-ed-add {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px 8px 12px;
+  border: 1px solid var(--primary-color, #03a9f4); border-radius: 18px; background: transparent;
+  color: var(--primary-color, #03a9f4); font: inherit; font-weight: 500; cursor: pointer; --mdc-icon-size: 20px;
+}
+.sgmc-ed-add:hover { background: color-mix(in srgb, var(--primary-color, #03a9f4) 8%, transparent); }
+`;
 
 export class SmartGraphMediaCardEditor extends Base {
   setConfig(config) {
@@ -837,6 +1149,31 @@ export class SmartGraphMediaCardEditor extends Base {
   set hass(hass) {
     this._hass = hass;
     if (this._form) this._form.hass = hass;
+    for (const item of this._presetItems || []) item.form.hass = hass;
+  }
+
+  _emit(next) {
+    this._config = next;
+    this._renderedPresets = JSON.stringify(next.presets || []);
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
+  }
+
+  _presets() {
+    return Array.isArray(this._config?.presets) ? this._config.presets : [];
+  }
+
+  _sources() {
+    const id = this._config?.entity;
+    const list = this._hass?.states?.[id]?.attributes?.source_list;
+    return Array.isArray(list) ? list.map(String) : [];
+  }
+
+  _setPresets(list, rebuild) {
+    const next = { ...this._config };
+    if (list.length) next.presets = list;
+    else delete next.presets;
+    this._emit(next);
+    if (rebuild) this._renderPresets();
   }
 
   _render() {
@@ -845,18 +1182,17 @@ export class SmartGraphMediaCardEditor extends Base {
       return;
     }
     if (!this._form) {
+      const style = document.createElement("style");
+      style.textContent = EDITOR_STYLES;
       this._form = document.createElement("ha-form");
       this._form.computeLabel = (s) => LABELS[s.name] ?? s.name;
-      this._form.computeHelper = (s) =>
-        s.name === "presets"
-          ? "Liste mit name und media_content_id (Alexa: Sendername wie in der Alexa-App), source (Quelle/Favorit) oder action (z. B. script.radio)."
-          : undefined;
       this._form.addEventListener("value-changed", (ev) => {
-        const next = mediaFromForm(this._config, ev.detail.value);
-        this._config = next;
-        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
+        ev.stopPropagation();
+        this._emit(mediaFromForm(this._config, ev.detail.value));
       });
-      this.append(this._form);
+      this._presetBox = document.createElement("div");
+      this._presetBox.className = "sgmc-ed-presets";
+      this.append(style, this._form, this._presetBox);
     }
     this._form.hass = this._hass;
     this._form.schema = [
@@ -896,9 +1232,118 @@ export class SmartGraphMediaCardEditor extends Base {
         },
       },
       { name: "preset_columns", selector: { number: { min: 1, max: 6, mode: "box" } } },
-      { name: "presets", selector: { object: {} } },
+      {
+        name: "preset_style",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "logo", label: "Logo + Name" },
+              { value: "tile", label: "Bild-Kachel" },
+              { value: "text", label: "Nur Name" },
+            ],
+          },
+        },
+      },
+      {
+        type: "grid",
+        name: "",
+        schema: [
+          ...((this._config?.preset_style || "logo") === "tile" ? [{ name: "preset_show_name", selector: { boolean: {} } }] : []),
+          ...((this._config?.preset_style || "logo") !== "text" ? [{ name: "preset_auto_image", selector: { boolean: {} } }] : []),
+        ],
+      },
     ];
     this._form.data = mediaToForm(this._config);
+    // the list is only rebuilt when the presets changed from outside (YAML mode, undo)
+    const json = JSON.stringify(this._presets());
+    if (json !== this._renderedPresets) this._renderPresets();
+  }
+
+  _button(icon, label, className, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `sgmc-ed-btn ${className || ""}`;
+    b.title = label;
+    b.setAttribute("aria-label", label);
+    const i = document.createElement("ha-icon");
+    i.icon = icon;
+    i.setAttribute("icon", icon);
+    b.append(i);
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  _renderPresets() {
+    const box = this._presetBox;
+    if (!box) return;
+    const presets = this._presets();
+    this._renderedPresets = JSON.stringify(presets);
+    box.replaceChildren();
+    const title = document.createElement("div");
+    title.className = "sgmc-ed-title";
+    title.textContent = "Sender / Favoriten";
+    const hint = document.createElement("div");
+    hint.className = "sgmc-ed-hint";
+    hint.textContent = "Jede Taste spielt einen Sender oder Inhalt ab, wählt eine Quelle des Players oder startet eine Aktion.";
+    box.append(title, hint);
+    const sources = this._sources();
+    this._presetItems = presets.map((preset, i) => {
+      const wrap = document.createElement("div");
+      wrap.className = "sgmc-ed-item";
+      const head = document.createElement("div");
+      head.className = "sgmc-ed-head";
+      const label = document.createElement("span");
+      label.className = "label";
+      const data = presetToForm(preset);
+      label.textContent = data.name || `Taste ${i + 1}`;
+      const move = (dir) => {
+        const list = [...this._presets()];
+        const j = i + dir;
+        [list[i], list[j]] = [list[j], list[i]];
+        this._setPresets(list, true);
+      };
+      const up = this._button("mdi:arrow-up", "Nach oben", "", () => move(-1));
+      const down = this._button("mdi:arrow-down", "Nach unten", "", () => move(1));
+      up.disabled = i === 0;
+      down.disabled = i === presets.length - 1;
+      const del = this._button("mdi:delete-outline", "Taste löschen", "delete", () => {
+        const list = this._presets().filter((_, k) => k !== i);
+        this._setPresets(list, true);
+      });
+      head.append(label, up, down, del);
+      const form = document.createElement("ha-form");
+      form.hass = this._hass;
+      form.computeLabel = (s) => PRESET_LABELS[s.name] ?? s.name;
+      form.computeHelper = (s) => PRESET_HELPERS[s.name];
+      form.schema = presetSchema(data.kind, sources);
+      form.data = data;
+      form.addEventListener("value-changed", (ev) => {
+        ev.stopPropagation();
+        const value = ev.detail.value || {};
+        const kindChanged = value.kind !== form.data?.kind;
+        const next = presetFromForm({ ...value, _image_upload_before: form.data?.image_upload });
+        const list = [...this._presets()];
+        list[i] = next;
+        this._setPresets(list, false);
+        label.textContent = next.name || `Taste ${i + 1}`;
+        // other kind → other fields
+        if (kindChanged) form.schema = presetSchema(value.kind, sources);
+        form.data = presetToForm(next);
+      });
+      wrap.append(head, form);
+      box.append(wrap);
+      return { wrap, form };
+    });
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "sgmc-ed-add";
+    const plus = document.createElement("ha-icon");
+    plus.icon = "mdi:plus";
+    plus.setAttribute("icon", "mdi:plus");
+    add.append(plus, document.createTextNode("Sender hinzufügen"));
+    add.addEventListener("click", () => this._setPresets([...this._presets(), { name: "", media_content_id: "" }], true));
+    box.append(add);
   }
 }
 

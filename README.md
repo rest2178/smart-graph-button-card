@@ -347,6 +347,8 @@ Tasten, die der Player nicht unterstützt (`supported_features`), werden ausgebl
 | Quelle / Favorit wählen | `source: Ö1` | `media_player.select_source` |
 | Beliebige Aktion | `action: script.morgen_radio`, optional `data:` (`entity_id: current` = der gewählte Player) | jeder Dienst |
 
+Jede Taste kann ein **Bild** bekommen (Senderlogo, Playlist-Cover): `image: /local/logos/oe3.png` (Datei im Ordner `www`), eine Internet-Adresse oder im Editor über „Bild hochladen“. Ohne Bild übernimmt die Karte automatisch das Senderbild, sobald der Sender einmal gelaufen ist (`preset_auto_image`).
+
 Ohne `media_content_type` wählt die Karte den passenden Typ nach der Integration des Players:
 
 | Integration | Standard-Typ | Hinweis |
@@ -367,9 +369,12 @@ Ohne `media_content_type` wählt die Karte den passenden Typ nach der Integratio
 | `show_power` / `show_volume` / `show_controls` | `true` | Ein/Aus, Lautstärke, Zurück/Wiedergabe/Weiter |
 | `show_media_info` | `true` | Titel und Interpret (bzw. Zustand) unter dem Namen |
 | `show_source_list` | `true` | Quellen des Players im Menü ▾ |
+| `preset_style` | `logo` | Aussehen der Sender-Tasten: `logo` (kleines Bild links neben dem Namen), `tile` (Bild füllt die Taste, Name klein darunter), `text` (nur Name). Tasten ohne Bild zeigen nur den Namen (bei `tile` groß in einer farbigen Fläche) |
+| `preset_show_name` | `true` | Bei `tile`: Namen unter dem Bild zeigen |
+| `preset_auto_image` | `true` | Hat eine Taste kein eigenes Bild, merkt sich die Karte das Senderbild, sobald dieser Sender einmal läuft (im Browser gespeichert) |
 | `artwork` | `thumbnail` | Bild des Senders bzw. Covers, solange etwas läuft: `thumbnail` (kleines Bild statt Symbol), `background` (unscharf als Hintergrund der Karte, abgedunkelt bzw. aufgehellt, damit alles lesbar bleibt), `both` (beides), `none` (kein Bild) |
 
-Im visuellen Editor lassen sich Player, Name, Symbol und alle Schalter einstellen; die Sender-Tasten werden dort als YAML-Liste bearbeitet. Weitere Beispiele: [examples/media.yaml](examples/media.yaml).
+Im visuellen Editor lassen sich Player, Name, Symbol und alle Schalter einstellen. Die Sender-Tasten werden dort ohne YAML gepflegt: „Sender hinzufügen“, je Taste Beschriftung, Symbol, Art (Sender/Inhalt abspielen, Quelle/Favorit des Players – mit Auswahlliste der Quellen –, beliebige Aktion) und die passenden Felder; mit den Pfeilen verschieben, mit dem Papierkorb löschen. Unvollständige Tasten werden in der Karte noch nicht angezeigt. Weitere Beispiele: [examples/media.yaml](examples/media.yaml).
 
 ## Minimale Konfiguration
 

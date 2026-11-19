@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl } from "../src/media-card.js";
+import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey } from "../src/media-card.js";
 
 test("config: players, presets, defaults, errors", () => {
   const c = validateMediaConfig({ entity: "media_player.a", entities: ["media_player.b", { entity: "media_player.a" }, { entity: "media_player.c", name: "Küche" }], presets: ["Ö3", { name: "Ö1", source: "Ö1" }] });
@@ -11,7 +11,8 @@ test("config: players, presets, defaults, errors", () => {
   assert.equal(c.show_power, true);
   assert.throws(() => validateMediaConfig({}));
   assert.throws(() => validateMediaConfig({ entity: "light.x" }));
-  assert.throws(() => validateMediaConfig({ entity: "media_player.a", presets: [{ name: "leer" }] }));
+  // incomplete presets (just added in the editor) are skipped, not an error
+  assert.equal(validateMediaConfig({ entity: "media_player.a", presets: [{ name: "leer" }, { name: "", media_content_id: "" }, { action: "" }] }).presets.length, 0);
   assert.throws(() => validateMediaConfig({ entity: "media_player.a", presets: [{ action: "kein service" }] }));
   assert.throws(() => validateMediaConfig({ entity: "media_player.a", preset_columns: 9 }));
 });
@@ -81,4 +82,48 @@ test("artwork: modes and picture url", () => {
   assert.equal(form.artwork, "background");
   assert.equal(mediaFromForm({ entity: "media_player.a", artwork: "both" }, { ...form, artwork: "thumbnail" }).artwork, undefined);
   assert.equal(mediaFromForm({ entity: "media_player.a" }, { ...form, artwork: "none" }).artwork, "none");
+});
+
+test("preset editor mapping: kinds round-trip", () => {
+  assert.deepEqual(presetToForm("Ö3"), { kind: "media", name: "Ö3", media_content_id: "Ö3" });
+  const media = { name: "Ö3", media_content_id: "Hitradio Ö3", media_content_type: "TUNEIN", icon: "mdi:radio" };
+  assert.deepEqual(presetFromForm(presetToForm(media)), media);
+  const src = { name: "Ö1", source: "Ö1" };
+  assert.deepEqual(presetFromForm(presetToForm(src)), src);
+  const act = { name: "Leise", action: "media_player.volume_set", data: { entity_id: "current", volume_level: 0.2 } };
+  assert.deepEqual(presetFromForm(presetToForm(act)), act);
+  assert.equal(presetToForm({ service: "script.x" }).action, "script.x");
+  // switching the kind drops the fields of the old kind
+  assert.deepEqual(presetFromForm({ ...presetToForm(media), kind: "source", source: "FM4" }), { name: "Ö3", icon: "mdi:radio", source: "FM4" });
+  // schema: source list as dropdown when the player has one
+  const names = (sch) => sch.flatMap((x) => (x.schema ? x.schema.map((y) => y.name) : [x.name]));
+  assert.ok(names(presetSchema("media", [])).includes("media_content_type"));
+  assert.ok(presetSchema("source", ["Ö1"]).find((x) => x.name === "source").selector.select);
+  assert.ok(names(presetSchema("action", [])).includes("data"));
+});
+
+test("preset pictures: config, styles, editor mapping", () => {
+  const c = validateMediaConfig({ entity: "media_player.a", presets: [{ name: "Ö3", media_content_id: "Hitradio Ö3", image: "/local/logos/oe3.png" }, { name: "FM4", source: "FM4", image: "" }] });
+  assert.equal(c.presets[0].image, "/local/logos/oe3.png");
+  assert.equal(c.presets[1].image, undefined);
+  assert.equal(c.preset_style, "logo");
+  assert.equal(c.preset_auto_image, true);
+  assert.equal(c.preset_show_name, true);
+  assert.equal(validateMediaConfig({ entity: "media_player.a", preset_style: "tile", preset_show_name: false }).preset_show_name, false);
+  assert.throws(() => validateMediaConfig({ entity: "media_player.a", preset_style: "huge" }));
+  assert.throws(() => validateMediaConfig({ entity: "media_player.a", presets: [{ name: "x", media_content_id: "x", image: 'a" onerror="x' }] }));
+  assert.equal(presetImageKey(["media_player.a"], { name: "Ö3", media_content_id: "Hitradio Ö3" }), "sgmc-img:media_player.a:Hitradio Ö3:Ö3");
+  // editor: image round-trip, upload replaces the address, removing the upload clears it
+  const f = presetToForm({ name: "Ö3", media_content_id: "x", image: "/local/a.png" });
+  assert.equal(presetFromForm(f).image, "/local/a.png");
+  assert.equal(presetFromForm({ ...f, image_upload: "/api/image/serve/abc/512x512", _image_upload_before: undefined }).image, "/api/image/serve/abc/512x512");
+  const up = presetToForm({ name: "Ö3", media_content_id: "x", image: "/api/image/serve/abc/512x512" });
+  assert.equal(up.image_upload, "/api/image/serve/abc/512x512");
+  assert.equal(presetFromForm({ ...up, image_upload: undefined, _image_upload_before: up.image_upload }).image, undefined);
+  // main form: style options
+  const form = mediaToForm({ entity: "media_player.a", preset_style: "tile", preset_auto_image: false });
+  assert.equal(form.preset_style, "tile");
+  const out = mediaFromForm({ entity: "media_player.a" }, { ...form, preset_style: "logo", preset_auto_image: true });
+  assert.equal(out.preset_style, undefined);
+  assert.equal(out.preset_auto_image, undefined);
 });

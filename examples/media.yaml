@@ -8,6 +8,7 @@ entities:
 presets:
   - name: Radio Steiermark
     media_content_id: Radio Steiermark
+    image: /local/logos/radio-steiermark.png   # optional: own logo
   - name: Radio Flamingo
     media_content_id: Radio Flamingo
   - name: Ö3
@@ -17,6 +18,7 @@ presets:
 type: custom:smart-graph-media-card
 entity: media_player.sonos_wohnzimmer
 artwork: both                 # thumbnail | background | both | none
+preset_style: tile            # logo | tile | text
 preset_columns: 2
 presets:
   - name: Ö1
