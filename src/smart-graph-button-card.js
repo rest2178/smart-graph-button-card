@@ -24,7 +24,7 @@ import { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } f
 
 export const CARD_TAG = "smart-graph-button-card";
 export const INFO_CARD_TAG = "smart-graph-info-card";
-export const CARD_VERSION = "1.16.0";
+export const CARD_VERSION = "1.17.0";
 
 let instanceCounter = 0;
 

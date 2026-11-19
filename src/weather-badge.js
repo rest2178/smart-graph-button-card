@@ -9,6 +9,8 @@ import { renderGraphSVG } from "./graph-renderer.js";
 import { formatNumber, getNumberLocale } from "./value-formatter.js";
 import { isPlainObject, parseNumber } from "./utils.js";
 import { TYPE_ICONS } from "./levels.js";
+import { fetchHistory } from "./history-provider.js";
+import { reduceSeries } from "./data-reducer.js";
 
 export const WEATHER_TAG = "smart-graph-weather-badge";
 export const WEATHER_EDITOR_TAG = "smart-graph-weather-badge-editor";
@@ -176,7 +178,8 @@ export function extraValue(extra, stateObj, ctx = {}) {
   }
   return text === null ? null : { icon: def.icon, text, label: def.label };
 }
-export const FORECAST_MODES = ["auto", "hourly", "daily", "none"];
+/** Background graph: forecast (auto/hourly/daily), temperature history of the last hours, or none. */
+export const FORECAST_MODES = ["auto", "hourly", "daily", "history", "none"];
 
 // weather entity supported_features
 const FORECAST_DAILY = 1;
@@ -197,11 +200,18 @@ export function validateWeatherConfig(raw) {
     errors.push("decimals muss 0, 1 oder 2 sein.");
     decimals = 0;
   }
+  if (raw.history_entity !== undefined && raw.history_entity !== "" && (typeof raw.history_entity !== "string" || !/^[a-z_]+\.[a-z0-9_]+$/.test(raw.history_entity))) {
+    errors.push(`history_entity „${raw.history_entity}“ ist keine gültige Entity-ID.`);
+  }
+  const hours = raw.hours_to_show === undefined ? 24 : parseNumber(raw.hours_to_show);
+  if (hours === null || hours < 1 || hours > 168) errors.push("hours_to_show muss zwischen 1 und 168 liegen.");
   const extras = (Array.isArray(raw.extras) ? raw.extras : raw.extras === undefined ? [] : [raw.extras]).map((e, i) => normalizeExtra(e, i, errors)).filter(Boolean);
   if (errors.length) throw new WeatherConfigError(errors.join("\n"));
   return {
     type: raw.type,
     extras,
+    history_entity: typeof raw.history_entity === "string" && raw.history_entity ? raw.history_entity : undefined,
+    hours_to_show: hours,
     entity: raw.entity,
     name: typeof raw.name === "string" && raw.name ? raw.name : undefined,
     show_name: raw.show_name === true,
@@ -216,7 +226,7 @@ export function validateWeatherConfig(raw) {
 /** Which forecast to subscribe to (or null). */
 export function forecastType(mode, supportedFeatures) {
   const f = Number(supportedFeatures) || 0;
-  if (mode === "none") return null;
+  if (mode === "none" || mode === "history") return null;
   if (mode === "hourly") return f & FORECAST_HOURLY ? "hourly" : null;
   if (mode === "daily") return f & FORECAST_DAILY ? "daily" : null;
   return f & FORECAST_HOURLY ? "hourly" : f & FORECAST_DAILY ? "daily" : null;
@@ -354,6 +364,8 @@ export class SmartGraphWeatherBadge extends Base {
     }
     this._unsubscribe();
     this._forecast = { hourly: null, daily: null };
+    this._history = [];
+    this._historyAt = 0;
     this._build();
     if (this._hass) this.hass = this._hass;
   }
@@ -363,6 +375,7 @@ export class SmartGraphWeatherBadge extends Base {
     this._hass = hass;
     if (!this._config || !this._els) return;
     this._subscribe();
+    this._loadHistory();
     if (!prev || prev.states?.[this._config.entity] !== hass.states?.[this._config.entity] || !this._drawn) this._update();
   }
 
@@ -466,6 +479,29 @@ export class SmartGraphWeatherBadge extends Base {
     );
   }
 
+  /** Temperature history of the last hours (weather attribute or own sensor), refreshed every 5 minutes. */
+  _loadHistory() {
+    const c = this._config;
+    if (c.forecast !== "history" || !this._hass || this._historyLoading) return;
+    if (this._historyAt && Date.now() - this._historyAt < 300000) return;
+    this._historyLoading = true;
+    const entityId = c.history_entity || c.entity;
+    const attribute = c.history_entity ? undefined : "temperature";
+    fetchHistory(this._hass, { entityId, attribute, hours: c.hours_to_show, updateInterval: 300 })
+      .then((res) => {
+        const data = res.points?.length ? reduceSeries(res.points, { start: res.start, end: res.end, buckets: 48, aggregation: "average", fill: "hold" }) : [];
+        this._history = data.filter((d) => Number.isFinite(d?.v)).length > 1 ? data : [];
+      })
+      .catch(() => {
+        this._history = [];
+      })
+      .finally(() => {
+        this._historyLoading = false;
+        this._historyAt = Date.now();
+        this._drawGraph();
+      });
+  }
+
   _unsubscribe() {
     for (const p of this._subs || []) Promise.resolve(p).then((unsub) => typeof unsub === "function" && unsub());
     this._subs = [];
@@ -524,7 +560,7 @@ export class SmartGraphWeatherBadge extends Base {
     const els = this._els;
     if (!els || !this._config) return;
     const type = this._graphType;
-    const points = type ? forecastPoints(this._forecast[type], type) : [];
+    const points = this._config.forecast === "history" ? this._history || [] : type ? forecastPoints(this._forecast[type], type) : [];
     const w = els.graph.clientWidth;
     const h = els.graph.clientHeight;
     const svg =
@@ -549,6 +585,8 @@ const LABELS = {
   extra_entities: "Eigene Sensoren als zusätzliche Werte (z. B. Regenmesser)",
   info: "Zusatz neben der Temperatur",
   forecast: "Verlauf im Hintergrund",
+  history_entity: "Eigener Temperatursensor für den Verlauf (optional)",
+  hours_to_show: "Zeitraum des Verlaufs (Stunden)",
   decimals: "Nachkommastellen",
 };
 
@@ -561,6 +599,8 @@ export function weatherToForm(config) {
     show_icon: c.show_icon !== false,
     info: c.info || "condition",
     forecast: c.forecast === false ? "none" : c.forecast || "auto",
+    history_entity: c.history_entity,
+    hours_to_show: c.hours_to_show ?? 24,
     decimals: c.decimals ?? 0,
     extras: (Array.isArray(c.extras) ? c.extras : []).filter((e) => typeof e === "string"),
     extra_entities: (Array.isArray(c.extras) ? c.extras : []).filter((e) => isPlainObject(e) && e.entity).map((e) => e.entity),
@@ -581,6 +621,10 @@ export function weatherFromForm(config, form) {
   else delete out.info;
   if (d.forecast && d.forecast !== "auto") out.forecast = d.forecast;
   else delete out.forecast;
+  if (out.forecast === "history" && typeof d.history_entity === "string" && d.history_entity) out.history_entity = d.history_entity;
+  else if (out.forecast !== "history" || d.history_entity !== undefined) delete out.history_entity;
+  if (out.forecast === "history" && typeof d.hours_to_show === "number" && d.hours_to_show !== 24) out.hours_to_show = d.hours_to_show;
+  else delete out.hours_to_show;
   if (d.extras !== undefined || d.extra_entities !== undefined) {
     const old = Array.isArray(out.extras) ? out.extras : [];
     const keys = Array.isArray(d.extras) ? d.extras : old.filter((e) => typeof e === "string");
@@ -657,6 +701,7 @@ export class SmartGraphWeatherBadgeEditor extends Base {
               { value: "auto", label: "Automatisch (stündlich, sonst täglich)" },
               { value: "hourly", label: "Vorhersage nächste 24 Stunden" },
               { value: "daily", label: "Vorhersage nächste Tage" },
+              { value: "history", label: "Temperaturverlauf der letzten Stunden (Standard 24 h)" },
               { value: "none", label: "Kein Verlauf" },
             ],
           },
@@ -667,6 +712,12 @@ export class SmartGraphWeatherBadgeEditor extends Base {
         selector: { select: { multiple: true, mode: "list", options: Object.entries(EXTRAS).map(([value, d]) => ({ value, label: d.label })) } },
       },
       { name: "extra_entities", selector: { entity: { multiple: true, filter: { domain: "sensor" } } } },
+      ...(this._config?.forecast === "history"
+        ? [
+            { name: "history_entity", selector: { entity: { filter: { domain: "sensor", device_class: "temperature" } } } },
+            { name: "hours_to_show", selector: { number: { min: 1, max: 168, mode: "box", unit_of_measurement: "h" } } },
+          ]
+        : []),
       { name: "decimals", selector: { number: { min: 0, max: 2, mode: "box" } } },
     ];
     this._form.data = weatherToForm(this._config);

@@ -100,3 +100,23 @@ test("extras editor mapping keeps sensor objects", () => {
   const none = weatherFromForm(cfg, { ...form, extras: [], extra_entities: [] });
   assert.equal(none.extras, undefined);
 });
+
+test("history graph: config and editor", () => {
+  const c = validateWeatherConfig({ entity: "weather.home", forecast: "history" });
+  assert.equal(c.forecast, "history");
+  assert.equal(c.hours_to_show, 24);
+  assert.equal(c.history_entity, undefined);
+  assert.equal(validateWeatherConfig({ entity: "weather.home", forecast: "history", history_entity: "sensor.aussen", hours_to_show: 48 }).history_entity, "sensor.aussen");
+  assert.throws(() => validateWeatherConfig({ entity: "weather.home", hours_to_show: 500 }));
+  assert.throws(() => validateWeatherConfig({ entity: "weather.home", history_entity: "kein sensor" }));
+  assert.equal(forecastType("history", 3), null, "no forecast subscription for the history graph");
+  const cfg = { entity: "weather.home" };
+  const out = weatherFromForm(cfg, { ...weatherToForm(cfg), forecast: "history", history_entity: "sensor.aussen", hours_to_show: 12 });
+  assert.equal(out.forecast, "history");
+  assert.equal(out.history_entity, "sensor.aussen");
+  assert.equal(out.hours_to_show, 12);
+  const back = weatherFromForm(out, { ...weatherToForm(out), forecast: "auto" });
+  assert.equal(back.forecast, undefined);
+  assert.equal(back.history_entity, undefined);
+  assert.equal(back.hours_to_show, undefined);
+});

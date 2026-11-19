@@ -404,6 +404,16 @@ entity: weather.forecast_home
 # show_name: false       # Name klein über der Temperatur
 ```
 
+Temperaturverlauf der letzten 24 Stunden als Hintergrund (aus der Home-Assistant-Historie, alle 5 Minuten aktualisiert):
+
+```yaml
+type: custom:smart-graph-weather-badge
+entity: weather.forecast_home
+forecast: history
+# history_entity: sensor.aussentemperatur   # optional: eigener Sensor
+# hours_to_show: 24
+```
+
 | Option | Standard | Beschreibung |
 | --- | --- | --- |
 | `entity` | – | Wetter-Entity (`weather.*`, Pflicht) |
@@ -411,7 +421,9 @@ entity: weather.forecast_home
 | `show_name` | `false` | Name klein über der Temperatur |
 | `show_icon` | `true` | Wettersymbol im Kreis |
 | `info` | `condition` | Zusatz neben der Temperatur: Wetterzustand, Höchst-/Tiefstwert heute, Luftfeuchtigkeit, Wind oder nichts |
-| `forecast` | `auto` | Verlauf im Hintergrund: Vorhersage der nächsten 24 Stunden (`hourly`), der nächsten Tage (`daily`), automatisch oder keiner |
+| `forecast` | `auto` | Verlauf im Hintergrund: Vorhersage der nächsten 24 Stunden (`hourly`), der nächsten Tage (`daily`), **Temperatur der letzten Stunden** (`history`), automatisch oder keiner |
+| `history_entity` | – | Bei `history`: eigener Temperatursensor statt der Historie der Wetter-Entity (meist genauer, z. B. Außenfühler) |
+| `hours_to_show` | `24` | Bei `history`: Zeitraum in Stunden (1–168) |
 | `extras` | – | Zusätzliche Werte hinter der Temperatur, jeweils mit kleinem Symbol (der Badge wird breiter): `humidity` (Luftfeuchtigkeit), `precipitation` (Regenmenge heute laut Vorhersage), `precipitation_probability` (Regenwahrscheinlichkeit), `wind`, `wind_gust`, `pressure`, `uv_index`, `apparent_temperature` (gefühlt), `dew_point`, `cloud_coverage`, `visibility`, `high_low` – oder eigene Sensoren als `{ entity: sensor.regen_heute, icon?, name?, unit?, decimals?, attribute? }` |
 | `decimals` | `0` | Nachkommastellen der Temperatur |
 | `color` | nach Wetter | Feste Akzentfarbe |

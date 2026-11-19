@@ -14,3 +14,7 @@ entity: weather.forecast_home
 extras:
   - humidity
   - precipitation
+---
+type: custom:smart-graph-weather-badge
+entity: weather.forecast_home
+forecast: history
