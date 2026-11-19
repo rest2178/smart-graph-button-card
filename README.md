@@ -412,8 +412,22 @@ entity: weather.forecast_home
 | `show_icon` | `true` | Wettersymbol im Kreis |
 | `info` | `condition` | Zusatz neben der Temperatur: Wetterzustand, Höchst-/Tiefstwert heute, Luftfeuchtigkeit, Wind oder nichts |
 | `forecast` | `auto` | Verlauf im Hintergrund: Vorhersage der nächsten 24 Stunden (`hourly`), der nächsten Tage (`daily`), automatisch oder keiner |
+| `extras` | – | Zusätzliche Werte hinter der Temperatur, jeweils mit kleinem Symbol (der Badge wird breiter): `humidity` (Luftfeuchtigkeit), `precipitation` (Regenmenge heute laut Vorhersage), `precipitation_probability` (Regenwahrscheinlichkeit), `wind`, `wind_gust`, `pressure`, `uv_index`, `apparent_temperature` (gefühlt), `dew_point`, `cloud_coverage`, `visibility`, `high_low` – oder eigene Sensoren als `{ entity: sensor.regen_heute, icon?, name?, unit?, decimals?, attribute? }` |
 | `decimals` | `0` | Nachkommastellen der Temperatur |
 | `color` | nach Wetter | Feste Akzentfarbe |
+
+Beispiel mit Luftfeuchtigkeit, Regenmenge und eigenem Regenmesser:
+
+```yaml
+type: custom:smart-graph-weather-badge
+entity: weather.forecast_home
+extras:
+  - humidity
+  - precipitation
+  - entity: sensor.regenmesser_heute
+```
+
+Werte, die gerade nicht verfügbar sind, werden ausgeblendet. Im Editor: „Zusätzliche Werte“ (Mehrfachauswahl) und „Eigene Sensoren als zusätzliche Werte“.
 
 Tippen öffnet den Wetter-Dialog von Home Assistant. Im Dashboard: Bearbeiten → Badge hinzufügen → „Smart Graph Weather Badge“; alle Optionen sind im visuellen Editor einstellbar.
 

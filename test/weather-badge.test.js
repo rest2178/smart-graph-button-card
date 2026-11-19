@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateWeatherConfig, forecastType, forecastPoints, infoText, conditionInfo, weatherToForm, weatherFromForm } from "../src/weather-badge.js";
+import { validateWeatherConfig, forecastType, forecastPoints, infoText, conditionInfo, weatherToForm, weatherFromForm, extraValue } from "../src/weather-badge.js";
 
 test("config defaults and errors", () => {
   const c = validateWeatherConfig({ entity: "weather.home" });
@@ -58,4 +58,45 @@ test("editor mapping", () => {
   assert.equal(back.info, undefined);
   assert.equal(back.show_name, undefined);
   assert.equal(back.forecast, undefined);
+});
+
+test("extras: config, weather attributes, forecast, own sensors", () => {
+  const c = validateWeatherConfig({ entity: "weather.home", extras: ["humidity", "precipitation", { entity: "sensor.rain_today", icon: "mdi:water" }] });
+  assert.deepEqual(c.extras[0], { key: "humidity" });
+  assert.equal(c.extras[2].entity, "sensor.rain_today");
+  assert.deepEqual(validateWeatherConfig({ entity: "weather.home" }).extras, []);
+  assert.throws(() => validateWeatherConfig({ entity: "weather.home", extras: ["pollen"] }));
+  assert.throws(() => validateWeatherConfig({ entity: "weather.home", extras: [{ entity: "kein entity" }] }));
+
+  const now = Date.parse("2026-11-20T12:00:00Z");
+  const s = { state: "rainy", attributes: { humidity: 81, wind_speed: 17.6, wind_speed_unit: "km/h", pressure: 1012.4, pressure_unit: "hPa", uv_index: 2, precipitation_unit: "mm", apparent_temperature: 5.4 } };
+  const ctx = { locale: "de", now };
+  assert.deepEqual(extraValue({ key: "humidity" }, s, ctx), { icon: "mdi:water-percent", text: "81 %", label: "Luftfeuchtigkeit" });
+  assert.equal(extraValue({ key: "wind" }, s, ctx).text, "18 km/h");
+  assert.equal(extraValue({ key: "pressure" }, s, ctx).text, "1.012 hPa");
+  assert.equal(extraValue({ key: "uv_index" }, s, ctx).text, "UV 2");
+  assert.equal(extraValue({ key: "apparent_temperature" }, s, ctx).text, "5°");
+  assert.equal(extraValue({ key: "visibility" }, s, ctx), null, "missing attribute → hidden");
+  // precipitation: daily forecast first, else the sum of the next 24 hours
+  assert.equal(extraValue({ key: "precipitation" }, s, { ...ctx, daily: [{ precipitation: 4.2, precipitation_probability: 70 }] }).text, "4,2 mm");
+  const hourly = Array.from({ length: 30 }, (_, i) => ({ datetime: new Date(now + i * 3600e3).toISOString(), precipitation: i < 4 ? 0.5 : 0, precipitation_probability: i === 2 ? 60 : 10 }));
+  assert.equal(extraValue({ key: "precipitation" }, s, { ...ctx, hourly }).text, "2 mm");
+  assert.equal(extraValue({ key: "precipitation_probability" }, s, { ...ctx, hourly }).text, "60 %");
+  assert.equal(extraValue({ key: "precipitation" }, s, ctx), null, "no forecast yet");
+  // own sensor
+  const states = { "sensor.rain_today": { state: "3.25", attributes: { unit_of_measurement: "mm", device_class: "precipitation", friendly_name: "Regen heute" } } };
+  assert.deepEqual(extraValue({ entity: "sensor.rain_today" }, s, { ...ctx, states }), { icon: "mdi:weather-pouring", text: "3,3 mm", label: "Regen heute" });
+  assert.equal(extraValue({ entity: "sensor.rain_today", decimals: 2, name: "Regen" }, s, { ...ctx, states }).text, "3,25 mm");
+  assert.equal(extraValue({ entity: "sensor.gone" }, s, { ...ctx, states }), null);
+});
+
+test("extras editor mapping keeps sensor objects", () => {
+  const cfg = { entity: "weather.home", extras: ["humidity", { entity: "sensor.rain_today", icon: "mdi:water" }] };
+  const form = weatherToForm(cfg);
+  assert.deepEqual(form.extras, ["humidity"]);
+  assert.deepEqual(form.extra_entities, ["sensor.rain_today"]);
+  const out = weatherFromForm(cfg, { ...form, extras: ["humidity", "precipitation"] });
+  assert.deepEqual(out.extras, ["humidity", "precipitation", { entity: "sensor.rain_today", icon: "mdi:water" }]);
+  const none = weatherFromForm(cfg, { ...form, extras: [], extra_entities: [] });
+  assert.equal(none.extras, undefined);
 });

@@ -8,3 +8,9 @@ entity: weather.forecast_home
 info: high_low
 show_name: true
 name: Graz
+---
+type: custom:smart-graph-weather-badge
+entity: weather.forecast_home
+extras:
+  - humidity
+  - precipitation

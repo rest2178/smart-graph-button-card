@@ -8,6 +8,7 @@
 import { renderGraphSVG } from "./graph-renderer.js";
 import { formatNumber, getNumberLocale } from "./value-formatter.js";
 import { isPlainObject, parseNumber } from "./utils.js";
+import { TYPE_ICONS } from "./levels.js";
 
 export const WEATHER_TAG = "smart-graph-weather-badge";
 export const WEATHER_EDITOR_TAG = "smart-graph-weather-badge-editor";
@@ -40,6 +41,141 @@ export function conditionInfo(condition) {
 }
 
 export const INFO_MODES = ["condition", "humidity", "wind", "high_low", "none"];
+
+/** Extra values next to the temperature: key → icon, German name, source. */
+export const EXTRAS = Object.freeze({
+  humidity: { icon: "mdi:water-percent", label: "Luftfeuchtigkeit" },
+  precipitation: { icon: "mdi:weather-pouring", label: "Regenmenge heute", forecast: true },
+  precipitation_probability: { icon: "mdi:umbrella-outline", label: "Regenwahrscheinlichkeit", forecast: true },
+  wind: { icon: "mdi:weather-windy", label: "Wind" },
+  wind_gust: { icon: "mdi:weather-windy-variant", label: "Windböen" },
+  pressure: { icon: "mdi:gauge", label: "Luftdruck" },
+  uv_index: { icon: "mdi:white-balance-sunny", label: "UV-Index" },
+  apparent_temperature: { icon: "mdi:thermometer", label: "Gefühlt" },
+  dew_point: { icon: "mdi:thermometer-water", label: "Taupunkt" },
+  cloud_coverage: { icon: "mdi:cloud-percent", label: "Bewölkung" },
+  visibility: { icon: "mdi:eye-outline", label: "Sichtweite" },
+  high_low: { icon: "mdi:thermometer-lines", label: "Höchst- / Tiefstwert", forecast: true },
+});
+const ENTITY_RE = /^[a-z_]+\.[a-z0-9_]+$/;
+
+function normalizeExtra(e, i, errors) {
+  if (typeof e === "string") {
+    if (!EXTRAS[e]) errors.push(`extras[${i}] „${e}“ ist unbekannt. Erlaubt: ${Object.keys(EXTRAS).join(", ")} oder { entity: sensor.… }.`);
+    return EXTRAS[e] ? { key: e } : null;
+  }
+  if (isPlainObject(e) && typeof e.entity === "string") {
+    if (!ENTITY_RE.test(e.entity)) {
+      errors.push(`extras[${i}].entity „${e.entity}“ ist keine gültige Entity-ID.`);
+      return null;
+    }
+    const d = e.decimals === undefined ? undefined : parseNumber(e.decimals);
+    if (d !== undefined && (d === null || d < 0 || d > 3 || !Number.isInteger(d))) errors.push(`extras[${i}].decimals muss 0 bis 3 sein.`);
+    return { entity: e.entity, attribute: typeof e.attribute === "string" ? e.attribute : undefined, icon: typeof e.icon === "string" ? e.icon : undefined, unit: e.unit === undefined ? undefined : String(e.unit), name: typeof e.name === "string" ? e.name : undefined, decimals: d ?? undefined };
+  }
+  errors.push(`extras[${i}] muss ein Name (z. B. humidity) oder { entity: … } sein.`);
+  return null;
+}
+
+const fmt = (v, decimals, locale) => formatNumber(v, { decimals, locale });
+
+/** Today's expected precipitation (daily forecast, else the next 24 hourly entries). */
+function precipitationToday(daily, hourly, now) {
+  const d = Number(daily?.[0]?.precipitation);
+  if (Number.isFinite(d)) return d;
+  if (!Array.isArray(hourly)) return null;
+  const next = hourly.filter((f) => !f?.datetime || Date.parse(f.datetime) >= now - 3600e3).slice(0, 24);
+  const vals = next.map((f) => Number(f?.precipitation)).filter(Number.isFinite);
+  return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
+}
+
+function precipitationChance(daily, hourly, now) {
+  const d = Number(daily?.[0]?.precipitation_probability);
+  if (Number.isFinite(d)) return d;
+  if (!Array.isArray(hourly)) return null;
+  const vals = hourly
+    .filter((f) => !f?.datetime || Date.parse(f.datetime) >= now - 3600e3)
+    .slice(0, 12)
+    .map((f) => Number(f?.precipitation_probability))
+    .filter(Number.isFinite);
+  return vals.length ? Math.max(...vals) : null;
+}
+
+/**
+ * Value of one extra: { icon, text, label } or null when not available.
+ * ctx: { states, daily, hourly, locale, now }
+ */
+export function extraValue(extra, stateObj, ctx = {}) {
+  const { locale, daily, hourly, now = Date.now() } = ctx;
+  if (extra.entity) {
+    const s = ctx.states?.[extra.entity];
+    if (!s) return null;
+    const raw = extra.attribute ? s.attributes?.[extra.attribute] : s.state;
+    if (raw === undefined || raw === null || raw === "" || raw === "unavailable" || raw === "unknown") return null;
+    const n = parseNumber(raw);
+    const unit = extra.unit ?? (extra.attribute ? "" : s.attributes?.unit_of_measurement || "");
+    const text = n === null ? String(raw) : `${fmt(n, extra.decimals ?? (Math.abs(n) < 10 && !Number.isInteger(n) ? 1 : 0), locale)}${unit ? (unit === "%" ? " %" : ` ${unit}`) : ""}`;
+    const dc = s.attributes?.device_class;
+    const icon = extra.icon || s.attributes?.icon || (dc === "precipitation" || dc === "precipitation_intensity" ? "mdi:weather-pouring" : TYPE_ICONS[dc]) || "mdi:gauge";
+    return { icon, text, label: extra.name || s.attributes?.friendly_name || extra.entity };
+  }
+  const def = EXTRAS[extra.key];
+  if (!def) return null;
+  const a = stateObj?.attributes || {};
+  const num = (v) => (v === undefined || v === null || v === "" ? null : parseNumber(v));
+  let text = null;
+  switch (extra.key) {
+    case "humidity":
+    case "cloud_coverage": {
+      const v = num(a[extra.key]);
+      if (v !== null) text = `${fmt(v, 0, locale)} %`;
+      break;
+    }
+    case "wind":
+    case "wind_gust": {
+      const v = num(extra.key === "wind" ? a.wind_speed : a.wind_gust_speed);
+      if (v !== null) text = `${fmt(v, 0, locale)} ${a.wind_speed_unit || "km/h"}`;
+      break;
+    }
+    case "pressure": {
+      const v = num(a.pressure);
+      if (v !== null) text = `${fmt(v, 0, locale)} ${a.pressure_unit || "hPa"}`;
+      break;
+    }
+    case "uv_index": {
+      const v = num(a.uv_index);
+      if (v !== null) text = `UV ${fmt(v, Number.isInteger(v) ? 0 : 1, locale)}`;
+      break;
+    }
+    case "apparent_temperature":
+    case "dew_point": {
+      const v = num(a[extra.key]);
+      if (v !== null) text = `${fmt(v, 0, locale)}°`;
+      break;
+    }
+    case "visibility": {
+      const v = num(a.visibility);
+      if (v !== null) text = `${fmt(v, v < 10 ? 1 : 0, locale)} ${a.visibility_unit || "km"}`;
+      break;
+    }
+    case "precipitation": {
+      const v = precipitationToday(daily, hourly, now);
+      if (v !== null) text = `${fmt(v, v > 0 && v < 10 && Math.round(v * 10) % 10 !== 0 ? 1 : 0, locale)} ${a.precipitation_unit || "mm"}`;
+      break;
+    }
+    case "precipitation_probability": {
+      const v = precipitationChance(daily, hourly, now);
+      if (v !== null) text = `${fmt(v, 0, locale)} %`;
+      break;
+    }
+    case "high_low":
+      text = infoText("high_low", stateObj, { daily, locale }) || null;
+      break;
+    default:
+      break;
+  }
+  return text === null ? null : { icon: def.icon, text, label: def.label };
+}
 export const FORECAST_MODES = ["auto", "hourly", "daily", "none"];
 
 // weather entity supported_features
@@ -61,9 +197,11 @@ export function validateWeatherConfig(raw) {
     errors.push("decimals muss 0, 1 oder 2 sein.");
     decimals = 0;
   }
+  const extras = (Array.isArray(raw.extras) ? raw.extras : raw.extras === undefined ? [] : [raw.extras]).map((e, i) => normalizeExtra(e, i, errors)).filter(Boolean);
   if (errors.length) throw new WeatherConfigError(errors.join("\n"));
   return {
     type: raw.type,
+    extras,
     entity: raw.entity,
     name: typeof raw.name === "string" && raw.name ? raw.name : undefined,
     show_name: raw.show_name === true,
@@ -172,6 +310,10 @@ const STYLES = `
 .line { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
 .temp { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
 .info { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; }
+.extras { display: flex; align-items: center; gap: 10px; flex: none; padding-left: 10px; margin-left: 2px; border-left: 1px solid color-mix(in srgb, var(--secondary-text-color) 28%, transparent); height: 18px; text-shadow: 0 0 3px var(--ha-card-background, var(--card-background-color, #fff)); }
+.extra { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--primary-text-color); }
+.extra ha-icon { --mdc-icon-size: 15px; color: var(--sgwb-accent); flex: none; }
+.extra.muted { display: none; }
 .hidden { display: none !important; }
 .warn { color: var(--error-color, #db4437); font-size: 12px; }
 `;
@@ -270,7 +412,16 @@ export class SmartGraphWeatherBadge extends Base {
     line.append(temp, info);
     text.append(label, line);
     badge.classList.toggle("no-icon", !c.show_icon);
-    badge.append(graph, icon, text);
+    const extras = el("div", `extras${c.extras.length ? "" : " hidden"}`);
+    const extraEls = c.extras.map(() => {
+      const item = el("span", "extra muted");
+      const ic = el("ha-icon");
+      const val = el("span");
+      item.append(ic, val);
+      extras.append(item);
+      return { item, ic, val };
+    });
+    badge.append(graph, icon, text, extras);
     const open = () => this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: c.entity }, bubbles: true, composed: true }));
     badge.addEventListener("click", open);
     badge.addEventListener("keydown", (ev) => {
@@ -279,7 +430,7 @@ export class SmartGraphWeatherBadge extends Base {
         open();
       }
     });
-    this._els = { badge, graph, glyph, label, temp, info };
+    this._els = { badge, graph, glyph, label, temp, info, extras, extraEls };
     if (this.isConnected) this.connectedCallback();
   }
 
@@ -291,7 +442,12 @@ export class SmartGraphWeatherBadge extends Base {
     const wanted = new Set();
     const graphType = forecastType(c.forecast, s.attributes?.supported_features);
     if (graphType) wanted.add(graphType);
-    if (c.info === "high_low" && forecastType("daily", s.attributes?.supported_features)) wanted.add("daily");
+    const needsDaily = c.info === "high_low" || c.extras.some((e) => e.key && EXTRAS[e.key].forecast);
+    if (needsDaily) {
+      // daily forecast for today's values, hourly as fallback
+      const t = forecastType("daily", s.attributes?.supported_features) || forecastType("hourly", s.attributes?.supported_features);
+      if (t) wanted.add(t);
+    }
     const key = `${c.entity}|${[...wanted].sort().join(",")}`;
     if (this._subKey === key) return;
     this._unsubscribe();
@@ -344,8 +500,23 @@ export class SmartGraphWeatherBadge extends Base {
     const info = unavailable ? "Nicht verfügbar" : infoText(c.info, s, { conditionLabel: label, daily: this._forecast.daily, locale });
     if (els.info.textContent !== info) els.info.textContent = info;
     els.info.classList.toggle("hidden", !info);
-    els.badge.setAttribute("aria-label", [c.show_name ? name : "", tempText, info].filter(Boolean).join(", "));
-    els.badge.title = [name, tempText, label].filter(Boolean).join(" · ");
+    const extraTexts = [];
+    c.extras.forEach((ex, i) => {
+      const v = unavailable && !ex.entity ? null : extraValue(ex, s, { states: this._hass.states, daily: this._forecast.daily, hourly: this._forecast.hourly, locale });
+      const e = els.extraEls[i];
+      e.item.classList.toggle("muted", !v);
+      if (!v) return;
+      if (e.ic.icon !== v.icon) {
+        e.ic.icon = v.icon;
+        e.ic.setAttribute("icon", v.icon);
+      }
+      if (e.val.textContent !== v.text) e.val.textContent = v.text;
+      e.item.title = v.label;
+      extraTexts.push(`${v.label} ${v.text}`);
+    });
+    els.extras.classList.toggle("hidden", !extraTexts.length);
+    els.badge.setAttribute("aria-label", [c.show_name ? name : "", tempText, info, ...extraTexts].filter(Boolean).join(", "));
+    els.badge.title = [name, tempText, label, ...extraTexts].filter(Boolean).join(" · ");
     this._drawGraph();
   }
 
@@ -374,6 +545,8 @@ const LABELS = {
   name: "Name (optional)",
   show_name: "Name über der Temperatur",
   show_icon: "Wettersymbol",
+  extras: "Zusätzliche Werte (Badge wird breiter)",
+  extra_entities: "Eigene Sensoren als zusätzliche Werte (z. B. Regenmesser)",
   info: "Zusatz neben der Temperatur",
   forecast: "Verlauf im Hintergrund",
   decimals: "Nachkommastellen",
@@ -389,6 +562,8 @@ export function weatherToForm(config) {
     info: c.info || "condition",
     forecast: c.forecast === false ? "none" : c.forecast || "auto",
     decimals: c.decimals ?? 0,
+    extras: (Array.isArray(c.extras) ? c.extras : []).filter((e) => typeof e === "string"),
+    extra_entities: (Array.isArray(c.extras) ? c.extras : []).filter((e) => isPlainObject(e) && e.entity).map((e) => e.entity),
   };
 }
 
@@ -406,6 +581,14 @@ export function weatherFromForm(config, form) {
   else delete out.info;
   if (d.forecast && d.forecast !== "auto") out.forecast = d.forecast;
   else delete out.forecast;
+  if (d.extras !== undefined || d.extra_entities !== undefined) {
+    const old = Array.isArray(out.extras) ? out.extras : [];
+    const keys = Array.isArray(d.extras) ? d.extras : old.filter((e) => typeof e === "string");
+    const ids = Array.isArray(d.extra_entities) ? d.extra_entities : old.filter((e) => isPlainObject(e) && e.entity).map((e) => e.entity);
+    const list = [...keys, ...ids.map((id) => old.find((e) => isPlainObject(e) && e.entity === id) || { entity: id })];
+    if (list.length) out.extras = list;
+    else delete out.extras;
+  }
   if (typeof d.decimals === "number" && d.decimals !== 0) out.decimals = d.decimals;
   else delete out.decimals;
   return out;
@@ -479,6 +662,11 @@ export class SmartGraphWeatherBadgeEditor extends Base {
           },
         },
       },
+      {
+        name: "extras",
+        selector: { select: { multiple: true, mode: "list", options: Object.entries(EXTRAS).map(([value, d]) => ({ value, label: d.label })) } },
+      },
+      { name: "extra_entities", selector: { entity: { multiple: true, filter: { domain: "sensor" } } } },
       { name: "decimals", selector: { number: { min: 0, max: 2, mode: "box" } } },
     ];
     this._form.data = weatherToForm(this._config);
