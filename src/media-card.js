@@ -54,8 +54,12 @@ export class MediaConfigError extends Error {}
 
 /** thumbnail: cover instead of the symbol; background: blurred cover behind the card; both; none. */
 export const ARTWORK_MODES = ["thumbnail", "background", "both", "none"];
-/** Preset buttons: logo (small picture + name), tile (picture fills the button), text (name only). */
-export const PRESET_STYLES = ["logo", "tile", "text"];
+/**
+ * Preset buttons: logo (small picture + name), tile (picture fills the button,
+ * name below), image (picture only – the name in the tile while there is no
+ * picture), text (name only).
+ */
+export const PRESET_STYLES = ["logo", "tile", "image", "text"];
 
 /** Key under which an automatically learned preset picture is stored. */
 export function presetImageKey(players, preset) {
@@ -205,6 +209,14 @@ export function presetCall(preset, entityId, platform, kind = "preset") {
   };
 }
 
+function wordMatch(hay, key) {
+  if (key.length < 2) return false;
+  const i = hay.indexOf(key);
+  if (i < 0) return false;
+  const isWord = (ch) => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
+  return !isWord(hay[i - 1]) && !isWord(hay[i + key.length]);
+}
+
 /** Index of the preset that is playing right now (or -1). */
 export function activePreset(presets, stateObj) {
   if (!stateObj || !["playing", "paused", "buffering", "on"].includes(stateObj.state)) return -1;
@@ -215,7 +227,7 @@ export function activePreset(presets, stateObj) {
   if (!hay.length) return -1;
   return presets.findIndex((p) => {
     const keys = [p.match, p.source, p.media_content_id, p.name].filter(Boolean).map((v) => String(v).toLowerCase());
-    return keys.some((k) => hay.some((h) => h === k || (k.length > 3 && h.includes(k))));
+    return keys.some((k) => hay.some((h) => h === k || (k.length > 3 && h.includes(k)) || wordMatch(h, k)));
   });
 }
 
@@ -248,6 +260,100 @@ export function pressedPreset(pressed, player, stateObj, now) {
     }
   } else if (pressed.contentId !== null && id && id !== pressed.contentId) return -1;
   return pressed.index;
+}
+
+/**
+ * Which preset is highlighted. A pressed preset wins while the player has not
+ * yet reported the new content (it still shows the old station, which may
+ * match another preset by name); afterwards a preset recognised by name wins.
+ * Returns { current, dropPressed }.
+ */
+export function currentPreset(matched, pressedIndex, pressed) {
+  if (!pressed || pressedIndex < 0) return { current: matched, dropPressed: !!pressed };
+  const pending = pressed.contentId === undefined;
+  if (pending || matched < 0 || matched === pressedIndex) return { current: pressedIndex, dropPressed: false };
+  return { current: matched, dropPressed: true };
+}
+
+// ---- learned preset pictures: browser cache + Home Assistant user data (all devices of the user)
+
+const LOGO_DATA_KEY = "smart_graph_media_logos";
+const logoStore = { map: null, loading: null, conn: null, dirty: {}, timer: null, cards: new Set() };
+
+function readLocalLogo(key) {
+  try {
+    const v = localStorage.getItem(key);
+    if (!v) return null;
+    if (v[0] === "{") return JSON.parse(v);
+    return { img: v, src: null };
+  } catch (_err) {
+    return null;
+  }
+}
+
+function writeLocalLogo(key, rec) {
+  try {
+    if (rec) localStorage.setItem(key, JSON.stringify(rec));
+    else localStorage.removeItem(key);
+  } catch (_err) {
+    /* storage full or blocked */
+  }
+}
+
+function getLogo(key) {
+  return (logoStore.map && logoStore.map[key]) || readLocalLogo(key);
+}
+
+function repaintLogoCards() {
+  for (const card of logoStore.cards) card._paintPresetImages();
+}
+
+function loadServerLogos(hass) {
+  const conn = hass?.connection;
+  if (!conn || typeof conn.sendMessagePromise !== "function") return;
+  logoStore.conn = conn;
+  if (logoStore.loading) return;
+  logoStore.loading = conn
+    .sendMessagePromise({ type: "frontend/get_user_data", key: LOGO_DATA_KEY })
+    .then((res) => {
+      const remote = isPlainObject(res?.value) ? res.value : {};
+      for (const [k, rec] of Object.entries(remote)) if (isPlainObject(rec) && !(k in logoStore.dirty)) writeLocalLogo(k, rec);
+      logoStore.map = { ...remote, ...(logoStore.map || {}) };
+      repaintLogoCards();
+    })
+    .catch(() => {
+      logoStore.map = logoStore.map || {};
+    });
+}
+
+function setLogo(key, rec) {
+  logoStore.map = { ...(logoStore.map || {}) };
+  if (rec) logoStore.map[key] = rec;
+  else delete logoStore.map[key];
+  writeLocalLogo(key, rec);
+  logoStore.dirty[key] = rec || null;
+  clearTimeout(logoStore.timer);
+  logoStore.timer = setTimeout(saveServerLogos, 1500);
+  repaintLogoCards();
+}
+
+async function saveServerLogos() {
+  const conn = logoStore.conn;
+  if (!conn) return;
+  const dirty = logoStore.dirty;
+  logoStore.dirty = {};
+  try {
+    // merge with what other devices saved meanwhile
+    const res = await conn.sendMessagePromise({ type: "frontend/get_user_data", key: LOGO_DATA_KEY });
+    const value = isPlainObject(res?.value) ? { ...res.value } : {};
+    for (const [k, rec] of Object.entries(dirty)) {
+      if (rec) value[k] = rec;
+      else delete value[k];
+    }
+    await conn.sendMessagePromise({ type: "frontend/set_user_data", key: LOGO_DATA_KEY, value });
+  } catch (_err) {
+    logoStore.dirty = { ...dirty, ...logoStore.dirty }; // try again with the next change
+  }
 }
 
 const PLAYLIST_RE = /playlist|wiedergabeliste/i;
@@ -511,6 +617,8 @@ button.preset .p-name { overflow: hidden; text-overflow: ellipsis; white-space: 
   color: var(--sgmc-active);
 }
 .presets.style-tile button.preset .p-art ha-icon { --mdc-icon-size: 28px; margin: 0; }
+.presets.style-image button.preset .p-art { flex-direction: column; gap: 4px; }
+.presets.style-image button.preset .p-art ha-icon { --mdc-icon-size: 22px; }
 .presets.style-tile button.preset.has-img .p-art { padding: 0; background: color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
 .presets.style-tile button.preset.has-img .p-art > :not(.p-img) { display: none; }
 .presets.style-tile button.preset .p-img { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -577,6 +685,7 @@ export class SmartGraphMediaCard extends Base {
   set hass(hass) {
     const prev = this._hass;
     this._hass = hass;
+    if (!logoStore.loading) loadServerLogos(hass);
     if (!this._config || !this._els) return;
     // only re-render when one of our players changed
     const changed = !prev || this._config.players.some((id) => prev.states?.[id] !== hass.states?.[id]);
@@ -602,9 +711,11 @@ export class SmartGraphMediaCard extends Base {
       if (!this._els.omenu.classList.contains("hidden")) this._toggleOptions(false);
     };
     document.addEventListener("click", this._outside, true);
+    logoStore.cards.add(this);
   }
 
   disconnectedCallback() {
+    logoStore.cards.delete(this);
     if (this._outside) document.removeEventListener("click", this._outside, true);
     clearTimeout(this._volTimer);
   }
@@ -615,12 +726,8 @@ export class SmartGraphMediaCard extends Base {
     if (!p || c.preset_style === "text") return { src: null };
     if (p.image) return { src: typeof this._hass?.hassUrl === "function" && p.image.startsWith("/") && !p.image.startsWith("//") ? this._hass.hassUrl(p.image) : p.image };
     if (!c.preset_auto_image) return { src: null };
-    try {
-      const v = localStorage.getItem(presetImageKey(c.players, p));
-      return { src: v || null, auto: true };
-    } catch (_err) {
-      return { src: null };
-    }
+    const rec = getLogo(presetImageKey(c.players, p));
+    return { src: rec?.img || null, auto: true };
   }
 
   _paintPresetImages() {
@@ -638,37 +745,32 @@ export class SmartGraphMediaCard extends Base {
     });
   }
 
-  _forgetPresetImage(i) {
-    try {
-      localStorage.removeItem(presetImageKey(this._config.players, this._config.presets[i]));
-    } catch (_err) {
-      /* ignore */
-    }
+  _forgetPresetImage(i, failedSrc) {
+    const key = presetImageKey(this._config.players, this._config.presets[i]);
+    const rec = getLogo(key);
+    if (rec && (!failedSrc || rec.img === failedSrc)) setLogo(key, null);
   }
 
   /**
-   * Store the picture of the playing station for preset i. Pictures from Home
-   * Assistant (media proxy with a rotating token) are copied as a small data
-   * URL; pictures from other servers are stored as their address.
+   * Store the picture of the playing station for preset i. `url` is the
+   * loadable address, `rawUrl` the address as the player reports it (used to
+   * notice a changed picture). `replace`: overwrite a stored picture when the
+   * station picture has changed. Pictures from Home Assistant (media proxy with
+   * a rotating token) are copied as a small image; pictures from other servers
+   * are stored as their address. Unchanged pictures are not loaded again.
    */
-  _learnPresetImage(i, url) {
+  _learnPresetImage(i, url, rawUrl, replace) {
     const c = this._config;
-    const key = presetImageKey(c.players, c.presets[i]);
-    try {
-      if (localStorage.getItem(key) || this._learning?.[key]) return;
-    } catch (_err) {
-      return;
-    }
+    const p = c.presets[i];
+    if (!p || p.image || !c.preset_auto_image || c.preset_style === "text") return;
+    const key = presetImageKey(c.players, p);
+    const src = artKey(rawUrl || url);
+    const rec = getLogo(key);
+    if ((rec && (!replace || rec.src === src)) || this._learning?.[key]) return;
     this._learning = { ...(this._learning || {}), [key]: true };
-    const done = (value) => {
+    const done = (img) => {
       if (this._learning) delete this._learning[key];
-      if (!value) return;
-      try {
-        localStorage.setItem(key, value);
-      } catch (_err) {
-        /* storage full or blocked */
-      }
-      this._paintPresetImages();
+      if (img) setLogo(key, { img, src, t: Date.now() });
     };
     let sameOrigin = false;
     try {
@@ -680,25 +782,26 @@ export class SmartGraphMediaCard extends Base {
       done(url);
       return;
     }
-    const img = new Image();
-    img.onload = () => {
+    const pic = new Image();
+    pic.onload = () => {
       try {
         const size = 160;
         const canvas = document.createElement("canvas");
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext("2d");
-        const scale = Math.max(size / img.naturalWidth, size / img.naturalHeight);
-        const w = img.naturalWidth * scale;
-        const h = img.naturalHeight * scale;
-        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-        done(canvas.toDataURL("image/jpeg", 0.85));
+        // contain: the whole logo stays visible; transparent parts stay transparent
+        const scale = Math.min(size / pic.naturalWidth, size / pic.naturalHeight);
+        const w = pic.naturalWidth * scale;
+        const h = pic.naturalHeight * scale;
+        ctx.drawImage(pic, (size - w) / 2, (size - h) / 2, w, h);
+        done(canvas.toDataURL("image/webp", 0.85));
       } catch (_err) {
         done(null);
       }
     };
-    img.onerror = () => done(null);
-    img.src = url;
+    pic.onerror = () => done(null);
+    pic.src = url;
   }
 
   _storageKey() {
@@ -788,14 +891,16 @@ export class SmartGraphMediaCard extends Base {
     transport.append(prev, play, next);
     controls.append(mute, vol, transport);
 
-    const presets = el("div", `presets style-${c.preset_style}${c.preset_show_name ? "" : " no-name"}${c.presets.length ? "" : " hidden"}`);
+    const tiles = c.preset_style === "tile" || c.preset_style === "image";
+    const noName = c.preset_style === "image" || !c.preset_show_name;
+    const presets = el("div", `presets style-${tiles ? "tile" : c.preset_style}${c.preset_style === "image" ? " style-image" : ""}${noName ? " no-name" : ""}${c.presets.length ? "" : " hidden"}`);
     presets.style.setProperty("--sgmc-cols", String(c.preset_columns));
     const presetButtons = c.presets.map((p, i) => {
       const b = el("button", "preset", { type: "button", title: p.name, "aria-label": p.name });
       const img = el("img", "p-img", { alt: "", decoding: "async" });
       img.addEventListener("error", () => {
         // picture not loadable: forget a learned one, show the button without it
-        if (img.dataset.auto) this._forgetPresetImage(i);
+        if (img.dataset.auto) this._forgetPresetImage(i, img.getAttribute("src"));
         b.classList.remove("has-img");
         img.removeAttribute("src");
       });
@@ -808,11 +913,15 @@ export class SmartGraphMediaCard extends Base {
       };
       const name = el("span", "p-name");
       name.textContent = p.name;
-      if (c.preset_style === "tile") {
+      if (tiles) {
         const art = el("span", "p-art");
         art.append(img);
         if (p.icon) art.append(icon());
-        else art.append(document.createTextNode(p.name));
+        if (!p.icon || c.preset_style === "image") {
+          const label = el("span", "p-label");
+          label.textContent = p.name;
+          art.append(label);
+        }
         b.append(art, name);
       } else {
         b.append(img);
@@ -905,6 +1014,7 @@ export class SmartGraphMediaCard extends Base {
     // the song, not the station – this way highlight and picture still match
     const s = this._stateObj();
     this._pressed = { player: this._current, index: i, at: Date.now(), idBefore: s?.attributes?.media_content_id ?? null, artBefore: artworkUrl(s) };
+    this._learnFor = null;
     this._call(call.domain, call.service, call.data);
     this._update();
   }
@@ -1221,22 +1331,38 @@ export class SmartGraphMediaCard extends Base {
     els.controls.classList.toggle("hidden", [els.mute, els.slider.parentElement, els.prev, els.play, els.next].every((b) => b.classList.contains("hidden")));
 
     // presets
+    const now = Date.now();
     const matched = activePreset(c.presets, s);
-    const pressed = matched < 0 ? pressedPreset(this._pressed, this._current, s, Date.now()) : -1;
-    if (matched >= 0 || (this._pressed && pressed < 0)) this._pressed = null;
-    const current = matched >= 0 ? matched : pressed;
+    const pressed = pressedPreset(this._pressed, this._current, s, now);
+    const pick = currentPreset(matched, pressed, this._pressed);
+    const pending = !!this._pressed && pressed >= 0 && this._pressed.contentId === undefined;
+    if (pick.dropPressed) this._pressed = null;
+    const current = pick.current;
     els.presetButtons.forEach(({ button: b }, i) => {
       b.classList.toggle("active", i === current);
       b.setAttribute("aria-pressed", String(i === current));
       b.disabled = unavailable;
     });
-    // automatic picture: remember the station picture while this preset plays
-    if (current >= 0 && c.preset_auto_image && c.preset_style !== "text" && !c.presets[current].image) {
+    // automatic picture: after pressing a preset take the first new station
+    // picture (replaces a changed one); a preset recognised by name only fills
+    // a missing picture
+    if (this._pressed?.started && !this._pressed.learnArmed) {
+      this._pressed.learnArmed = true;
+      this._learnFor = { index: this._pressed.index, player: this._current, artBefore: this._pressed.artBefore, start: now };
+    }
+    const lf = this._learnFor;
+    if (lf && (lf.player !== this._current || (current >= 0 && current !== lf.index) || now - lf.start > 180000)) this._learnFor = null;
+    const rawArt = artworkUrl(s);
+    if (rawArt) {
       const art = artworkUrl(s, this._hass);
-      // after pressing a preset wait for the new picture (not the one of the previous station)
-      const p = this._pressed;
-      const stale = pressed >= 0 && (!p.started || artKey(artworkUrl(s)) === artKey(p.artBefore) || Date.now() - p.at > 600000);
-      if (art && !stale) this._learnPresetImage(current, art);
+      if (this._learnFor) {
+        if (artKey(rawArt) !== artKey(this._learnFor.artBefore)) {
+          this._learnPresetImage(this._learnFor.index, art, rawArt, true);
+          this._learnFor = null;
+        }
+      } else if (!pending && matched >= 0 && current === matched) {
+        this._learnPresetImage(matched, art, rawArt, false);
+      }
     }
     this._paintPresetImages();
 
@@ -1587,6 +1713,7 @@ export class SmartGraphMediaCardEditor extends Base {
             options: [
               { value: "logo", label: "Logo + Name" },
               { value: "tile", label: "Bild-Kachel" },
+              { value: "image", label: "Nur Bild (ohne Bild: Name in der Kachel)" },
               { value: "text", label: "Nur Name" },
             ],
           },

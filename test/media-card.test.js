@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, artKey, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
+import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, artKey, currentPreset, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
 
 test("config: players, presets, defaults, errors", () => {
   const c = validateMediaConfig({ entity: "media_player.a", entities: ["media_player.b", { entity: "media_player.a" }, { entity: "media_player.c", name: "Küche" }], presets: ["Ö3", { name: "Ö1", source: "Ö1" }] });
@@ -210,4 +210,36 @@ test("findPlaylists searches the media library", async () => {
   assert.equal(playlistItems(tree.favs).length, 0, "favorites are no playlists");
   assert.equal(playlistItems(tree.favs, true).length, 1, "inside a playlist folder every playable item counts");
   assert.equal(playlistFolders(tree.lib).length, 1);
+});
+
+test("pressing Ö3 while Radio Steiermark still plays keeps Ö3 (Alexa reports late)", () => {
+  const presets = [{ name: "Radio Steiermark", media_content_id: "Radio Steiermark" }, { name: "Ö3", media_content_id: "Hitradio Ö3" }];
+  const steiermark = { state: "playing", attributes: { media_title: "Radio Steiermark", media_content_id: "st", entity_picture: "/p?token=A&cache=st" } };
+  const pressed = { player: "m", index: 1, at: 0, idBefore: "st", artBefore: "/p?token=A&cache=st" };
+  // 10 s: Alexa still reports Steiermark, which matches preset 0 by name
+  let m = activePreset(presets, steiermark);
+  assert.equal(m, 0);
+  let pi = pressedPreset(pressed, "m", steiermark, 10000);
+  assert.deepEqual(currentPreset(m, pi, pressed), { current: 1, dropPressed: false });
+  // 40 s: Ö3 arrives (song title only)
+  const oe3 = { state: "playing", attributes: { media_title: "Some Song", media_content_id: "oe3", entity_picture: "/p?token=A&cache=oe3" } };
+  m = activePreset(presets, oe3);
+  pi = pressedPreset(pressed, "m", oe3, 40000);
+  assert.equal(pressed.started, true);
+  assert.deepEqual(currentPreset(m, pi, pressed), { current: 1, dropPressed: false });
+  // later the user switches to Steiermark by voice: recognised by name, press dropped
+  pi = pressedPreset(pressed, "m", steiermark, 90000);
+  assert.deepEqual(currentPreset(activePreset(presets, steiermark), pi, pressed), { current: 0, dropPressed: true });
+  assert.deepEqual(currentPreset(0, -1, null), { current: 0, dropPressed: false });
+});
+
+test("short station names match as a whole word", () => {
+  const presets = [{ name: "Ö3", media_content_id: "x" }, { name: "Ö1", media_content_id: "y" }];
+  assert.equal(activePreset(presets, { state: "playing", attributes: { media_title: "Hitradio Ö3 – live" } }), 0);
+  assert.equal(activePreset(presets, { state: "playing", attributes: { media_title: "BÖ3X" } }), -1);
+});
+
+test("preset style image", () => {
+  assert.equal(validateMediaConfig({ entity: "media_player.a", preset_style: "image" }).preset_style, "image");
+  assert.equal(mediaFromForm({ entity: "media_player.a" }, { ...mediaToForm({ entity: "media_player.a" }), preset_style: "image" }).preset_style, "image");
 });
