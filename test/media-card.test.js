@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, artKey, currentPreset, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
+import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, artKey, currentPreset, mergeLogos, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
 
 test("config: players, presets, defaults, errors", () => {
   const c = validateMediaConfig({ entity: "media_player.a", entities: ["media_player.b", { entity: "media_player.a" }, { entity: "media_player.c", name: "Küche" }], presets: ["Ö3", { name: "Ö1", source: "Ö1" }] });
@@ -242,4 +242,14 @@ test("short station names match as a whole word", () => {
 test("preset style image", () => {
   assert.equal(validateMediaConfig({ entity: "media_player.a", preset_style: "image" }).preset_style, "image");
   assert.equal(mediaFromForm({ entity: "media_player.a" }, { ...mediaToForm({ entity: "media_player.a" }), preset_style: "image" }).preset_style, "image");
+});
+
+test("logo maps merge by time, deletions stay deleted", () => {
+  const user = { a: { img: "data:1", src: "x", t: 10 }, b: { img: "data:b", t: 5 } };
+  const system = { a: { img: "data:2", src: "y", t: 20 }, b: { deleted: true, t: 8 }, c: { img: "data:c", t: 1 }, bad: { t: 99 } };
+  const m = mergeLogos(user, system, null);
+  assert.equal(m.a.img, "data:2");
+  assert.equal(m.b.deleted, true);
+  assert.equal(m.c.img, "data:c");
+  assert.equal(m.bad, undefined);
 });

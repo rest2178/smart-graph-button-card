@@ -275,17 +275,36 @@ export function currentPreset(matched, pressedIndex, pressed) {
   return { current: matched, dropPressed: true };
 }
 
-// ---- learned preset pictures: browser cache + Home Assistant user data (all devices of the user)
+// ---- learned preset pictures
+// Stored in the browser (fast first paint), in the Home Assistant user data
+// (all devices of the user) and – written by admins – in the Home Assistant
+// system data (all users and devices). Open cards follow changes live.
 
 const LOGO_DATA_KEY = "smart_graph_media_logos";
-const logoStore = { map: null, loading: null, conn: null, dirty: {}, timer: null, cards: new Set() };
+const logoStore = { map: null, started: false, conn: null, admin: false, dirty: {}, timer: null, cards: new Set() };
+
+/**
+ * Merge picture maps: per key the newest record wins (records carry `t`);
+ * deleted pictures are kept as { deleted: true, t } so they do not come back.
+ */
+export function mergeLogos(...maps) {
+  const out = {};
+  for (const m of maps) {
+    if (!isPlainObject(m)) continue;
+    for (const [k, rec] of Object.entries(m)) {
+      if (!isPlainObject(rec) || (!rec.img && !rec.deleted)) continue;
+      if (!out[k] || (Number(rec.t) || 0) > (Number(out[k].t) || 0)) out[k] = rec;
+    }
+  }
+  return out;
+}
 
 function readLocalLogo(key) {
   try {
     const v = localStorage.getItem(key);
     if (!v) return null;
     if (v[0] === "{") return JSON.parse(v);
-    return { img: v, src: null };
+    return { img: v, src: null, t: 0 };
   } catch (_err) {
     return null;
   }
@@ -293,7 +312,7 @@ function readLocalLogo(key) {
 
 function writeLocalLogo(key, rec) {
   try {
-    if (rec) localStorage.setItem(key, JSON.stringify(rec));
+    if (rec && !rec.deleted) localStorage.setItem(key, JSON.stringify(rec));
     else localStorage.removeItem(key);
   } catch (_err) {
     /* storage full or blocked */
@@ -301,40 +320,71 @@ function writeLocalLogo(key, rec) {
 }
 
 function getLogo(key) {
-  return (logoStore.map && logoStore.map[key]) || readLocalLogo(key);
+  const rec = (logoStore.map && logoStore.map[key]) || readLocalLogo(key);
+  return rec && !rec.deleted && rec.img ? rec : null;
 }
 
 function repaintLogoCards() {
   for (const card of logoStore.cards) card._paintPresetImages();
 }
 
-function loadServerLogos(hass) {
+function takeRemote(value) {
+  const remote = mergeLogos(value);
+  const before = logoStore.map || {};
+  const merged = mergeLogos(before, remote);
+  let changed = false;
+  for (const [k, rec] of Object.entries(merged)) {
+    if (before[k] === rec) continue;
+    if (!before[k] || JSON.stringify(before[k]) !== JSON.stringify(rec)) {
+      changed = true;
+      if (!(k in logoStore.dirty)) writeLocalLogo(k, rec);
+    }
+  }
+  logoStore.map = merged;
+  if (changed) repaintLogoCards();
+}
+
+function startLogoSync(hass) {
   const conn = hass?.connection;
   if (!conn || typeof conn.sendMessagePromise !== "function") return;
   logoStore.conn = conn;
-  if (logoStore.loading) return;
-  logoStore.loading = conn
-    .sendMessagePromise({ type: "frontend/get_user_data", key: LOGO_DATA_KEY })
-    .then((res) => {
-      const remote = isPlainObject(res?.value) ? res.value : {};
-      for (const [k, rec] of Object.entries(remote)) if (isPlainObject(rec) && !(k in logoStore.dirty)) writeLocalLogo(k, rec);
-      logoStore.map = { ...remote, ...(logoStore.map || {}) };
-      repaintLogoCards();
-    })
-    .catch(() => {
-      logoStore.map = logoStore.map || {};
-    });
+  logoStore.admin = !!hass.user?.is_admin;
+  if (logoStore.started) return;
+  logoStore.started = true;
+  logoStore.map = logoStore.map || {};
+  for (const scope of ["user", "system"]) {
+    const get = () =>
+      conn
+        .sendMessagePromise({ type: `frontend/get_${scope}_data`, key: LOGO_DATA_KEY })
+        .then((res) => takeRemote(res?.value))
+        .catch(() => {});
+    if (typeof conn.subscribeMessage === "function") {
+      Promise.resolve(conn.subscribeMessage((ev) => takeRemote(ev?.value), { type: `frontend/subscribe_${scope}_data`, key: LOGO_DATA_KEY })).catch(get);
+    } else get();
+  }
+  // admins share logos learned earlier (user data) with all users once
+  if (logoStore.admin) {
+    setTimeout(() => {
+      if (Object.keys(logoStore.map || {}).length) saveScope(conn, "system", logoStore.map).catch(() => {});
+    }, 5000);
+  }
 }
 
 function setLogo(key, rec) {
-  logoStore.map = { ...(logoStore.map || {}) };
-  if (rec) logoStore.map[key] = rec;
-  else delete logoStore.map[key];
-  writeLocalLogo(key, rec);
-  logoStore.dirty[key] = rec || null;
+  const value = rec || { deleted: true, t: Date.now() };
+  logoStore.map = { ...(logoStore.map || {}), [key]: value };
+  writeLocalLogo(key, value);
+  logoStore.dirty[key] = value;
   clearTimeout(logoStore.timer);
   logoStore.timer = setTimeout(saveServerLogos, 1500);
   repaintLogoCards();
+}
+
+async function saveScope(conn, scope, dirty) {
+  // merge with what other devices saved meanwhile
+  const res = await conn.sendMessagePromise({ type: `frontend/get_${scope}_data`, key: LOGO_DATA_KEY });
+  const value = mergeLogos(res?.value, dirty);
+  await conn.sendMessagePromise({ type: `frontend/set_${scope}_data`, key: LOGO_DATA_KEY, value });
 }
 
 async function saveServerLogos() {
@@ -343,17 +393,13 @@ async function saveServerLogos() {
   const dirty = logoStore.dirty;
   logoStore.dirty = {};
   try {
-    // merge with what other devices saved meanwhile
-    const res = await conn.sendMessagePromise({ type: "frontend/get_user_data", key: LOGO_DATA_KEY });
-    const value = isPlainObject(res?.value) ? { ...res.value } : {};
-    for (const [k, rec] of Object.entries(dirty)) {
-      if (rec) value[k] = rec;
-      else delete value[k];
-    }
-    await conn.sendMessagePromise({ type: "frontend/set_user_data", key: LOGO_DATA_KEY, value });
+    await saveScope(conn, "user", dirty);
   } catch (_err) {
     logoStore.dirty = { ...dirty, ...logoStore.dirty }; // try again with the next change
+    return;
   }
+  // system data: shared by all users; only admins may write it (older Home Assistant: not available)
+  if (logoStore.admin) await saveScope(conn, "system", dirty).catch(() => {});
 }
 
 const PLAYLIST_RE = /playlist|wiedergabeliste/i;
@@ -685,7 +731,7 @@ export class SmartGraphMediaCard extends Base {
   set hass(hass) {
     const prev = this._hass;
     this._hass = hass;
-    if (!logoStore.loading) loadServerLogos(hass);
+    if (!logoStore.started) startLogoSync(hass);
     if (!this._config || !this._els) return;
     // only re-render when one of our players changed
     const changed = !prev || this._config.players.some((id) => prev.states?.[id] !== hass.states?.[id]);
