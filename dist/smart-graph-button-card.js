@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.17.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.17.1 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -5163,7 +5163,7 @@ const PRESET_STYLES = ["logo", "tile", "text"];
 
 /** Key under which an automatically learned preset picture is stored. */
 function presetImageKey(players, preset) {
-  return `sgmc-img:${players[0] || ""}:${preset.media_content_id ?? preset.source ?? preset.action ?? ""}:${preset.name}`;
+  return `sgmc-img2:${players[0] || ""}:${preset.media_content_id ?? preset.source ?? preset.action ?? ""}:${preset.name}`;
 }
 
 function normalizePreset(p, i, errors) {
@@ -5323,22 +5323,34 @@ function activePreset(presets, stateObj) {
   });
 }
 
+/** Picture address without the rotating access token (to compare pictures). */
+function artKey(url) {
+  if (!url) return null;
+  return String(url).replace(/([?&])token=[^&]*(&|$)/, (m, a, b) => (b ? a : "")).replace(/[?&]$/, "");
+}
+
 /**
- * Index of the preset pressed last, as long as it is plausibly still playing:
- * same player, not switched to something else (media_content_id changed) and
- * not stopped (a short grace time covers the start-up of the player).
- * Updates `pressed.contentId` (content seen after the start). Returns -1 otherwise.
+ * Index of the preset pressed last, as long as it is plausibly still playing.
+ * `pressed` = { player, index, at, idBefore, artBefore } (state at the press).
+ * Slow integrations (Alexa polls) report the new station only after a while:
+ * until the player shows new content (other media_content_id or picture) the
+ * press stays pending. After that the content id is remembered and a later
+ * change means something else plays. Sets `pressed.started` once the new
+ * content is visible. Returns -1 when the preset no longer applies.
  */
 function pressedPreset(pressed, player, stateObj, now) {
   if (!pressed || pressed.player !== player || !stateObj) return -1;
   const age = now - pressed.at;
   const running = ["playing", "paused", "buffering", "on"].includes(stateObj.state);
-  if (!running) return age < 20000 ? pressed.index : -1;
-  const id = stateObj.attributes?.media_content_id;
-  if (age > 5000) {
-    if (pressed.contentId === undefined) pressed.contentId = id ?? null;
-    else if (pressed.contentId !== null && id && id !== pressed.contentId) return -1;
-  }
+  if (!running) return age < 30000 ? pressed.index : -1;
+  const id = stateObj.attributes?.media_content_id ?? null;
+  if (pressed.contentId === undefined) {
+    const changed = id !== (pressed.idBefore ?? null) || artKey(artworkUrl(stateObj)) !== artKey(pressed.artBefore);
+    if (changed || age > 300000) {
+      pressed.contentId = id;
+      pressed.started = changed;
+    }
+  } else if (pressed.contentId !== null && id && id !== pressed.contentId) return -1;
   return pressed.index;
 }
 
@@ -5884,7 +5896,7 @@ class SmartGraphMediaCard extends Base {
     presets.style.setProperty("--sgmc-cols", String(c.preset_columns));
     const presetButtons = c.presets.map((p, i) => {
       const b = el("button", "preset", { type: "button", title: p.name, "aria-label": p.name });
-      const img = el("img", "p-img", { alt: "", loading: "lazy", decoding: "async" });
+      const img = el("img", "p-img", { alt: "", decoding: "async" });
       img.addEventListener("error", () => {
         // picture not loadable: forget a learned one, show the button without it
         if (img.dataset.auto) this._forgetPresetImage(i);
@@ -5995,7 +6007,8 @@ class SmartGraphMediaCard extends Base {
     const call = presetCall(p, this._current, this._platform(this._current));
     // remember the pressed preset: many players (e.g. Alexa with radio) report
     // the song, not the station – this way highlight and picture still match
-    this._pressed = { player: this._current, index: i, at: Date.now(), artBefore: artworkUrl(this._stateObj(), this._hass) };
+    const s = this._stateObj();
+    this._pressed = { player: this._current, index: i, at: Date.now(), idBefore: s?.attributes?.media_content_id ?? null, artBefore: artworkUrl(s) };
     this._call(call.domain, call.service, call.data);
     this._update();
   }
@@ -6325,7 +6338,8 @@ class SmartGraphMediaCard extends Base {
     if (current >= 0 && c.preset_auto_image && c.preset_style !== "text" && !c.presets[current].image) {
       const art = artworkUrl(s, this._hass);
       // after pressing a preset wait for the new picture (not the one of the previous station)
-      const stale = pressed >= 0 && (art === this._pressed?.artBefore || Date.now() - this._pressed.at > 120000);
+      const p = this._pressed;
+      const stale = pressed >= 0 && (!p.started || artKey(artworkUrl(s)) === artKey(p.artBefore) || Date.now() - p.at > 600000);
       if (art && !stale) this._learnPresetImage(current, art);
     }
     this._paintPresetImages();
@@ -6812,7 +6826,7 @@ function registerMediaCard() {
     documentationURL: "https://github.com/rest2178/smart-graph-button-card",
   });
 }
-return { MEDIA_TAG, MEDIA_EDITOR_TAG, FEATURES, supports, MediaConfigError, ARTWORK_MODES, PRESET_STYLES, presetImageKey, validateMediaConfig, artworkUrl, defaultContentType, presetCall, activePreset, pressedPreset, playlistItems, playlistFolders, findPlaylists, volumeIcon, SmartGraphMediaCard, presetToForm, presetFromForm, presetSchema, mediaToForm, mediaFromForm, SmartGraphMediaCardEditor, registerMediaCard };
+return { MEDIA_TAG, MEDIA_EDITOR_TAG, FEATURES, supports, MediaConfigError, ARTWORK_MODES, PRESET_STYLES, presetImageKey, validateMediaConfig, artworkUrl, defaultContentType, presetCall, activePreset, artKey, pressedPreset, playlistItems, playlistFolders, findPlaylists, volumeIcon, SmartGraphMediaCard, presetToForm, presetFromForm, presetSchema, mediaToForm, mediaFromForm, SmartGraphMediaCardEditor, registerMediaCard };
 })();
 
 // ---- src/weather-badge.js
@@ -7733,7 +7747,7 @@ const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = 
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.17.0";
+const CARD_VERSION = "1.17.1";
 
 let instanceCounter = 0;
 

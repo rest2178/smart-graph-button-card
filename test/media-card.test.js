@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
+import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, artKey, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
 
 test("config: players, presets, defaults, errors", () => {
   const c = validateMediaConfig({ entity: "media_player.a", entities: ["media_player.b", { entity: "media_player.a" }, { entity: "media_player.c", name: "Küche" }], presets: ["Ö3", { name: "Ö1", source: "Ö1" }] });
@@ -112,7 +112,7 @@ test("preset pictures: config, styles, editor mapping", () => {
   assert.equal(validateMediaConfig({ entity: "media_player.a", preset_style: "tile", preset_show_name: false }).preset_show_name, false);
   assert.throws(() => validateMediaConfig({ entity: "media_player.a", preset_style: "huge" }));
   assert.throws(() => validateMediaConfig({ entity: "media_player.a", presets: [{ name: "x", media_content_id: "x", image: 'a" onerror="x' }] }));
-  assert.equal(presetImageKey(["media_player.a"], { name: "Ö3", media_content_id: "Hitradio Ö3" }), "sgmc-img:media_player.a:Hitradio Ö3:Ö3");
+  assert.equal(presetImageKey(["media_player.a"], { name: "Ö3", media_content_id: "Hitradio Ö3" }), "sgmc-img2:media_player.a:Hitradio Ö3:Ö3");
   // editor: image round-trip, upload replaces the address, removing the upload clears it
   const f = presetToForm({ name: "Ö3", media_content_id: "x", image: "/local/a.png" });
   assert.equal(presetFromForm(f).image, "/local/a.png");
@@ -129,17 +129,40 @@ test("preset pictures: config, styles, editor mapping", () => {
 });
 
 test("pressed preset stays active while the station plays", () => {
-  const pressed = { player: "media_player.a", index: 1, at: 0 };
+  const pressed = { player: "media_player.a", index: 1, at: 0, idBefore: null };
   const play = (id) => ({ state: "playing", attributes: { media_title: "Some Song", media_content_id: id } });
   assert.equal(pressedPreset(pressed, "media_player.a", { state: "idle", attributes: {} }, 3000), 1, "start-up grace");
-  assert.equal(pressedPreset(pressed, "media_player.a", play("s1"), 2000), 1);
   assert.equal(pressedPreset(pressed, "media_player.a", play("s1"), 6000), 1);
   assert.equal(pressed.contentId, "s1");
+  assert.equal(pressed.started, true);
   assert.equal(pressedPreset(pressed, "media_player.a", play("s1"), 60000), 1, "songs change, station stays");
   assert.equal(pressedPreset(pressed, "media_player.a", play("other"), 61000), -1, "something else plays");
   assert.equal(pressedPreset(pressed, "media_player.b", play("s1"), 6000), -1, "other player");
-  assert.equal(pressedPreset({ ...pressed }, "media_player.a", { state: "idle", attributes: {} }, 30000), -1, "stopped");
+  assert.equal(pressedPreset({ ...pressed }, "media_player.a", { state: "idle", attributes: {} }, 31000), -1, "stopped");
   assert.equal(pressedPreset(null, "media_player.a", play("s1"), 1), -1);
+});
+
+test("pressed preset waits for slow players (Alexa) to report the new station", () => {
+  const old = { state: "playing", attributes: { media_content_id: "old", entity_picture: "/api/media_player_proxy/m?token=AAA&cache=1" } };
+  const pressed = { player: "m", index: 0, at: 0, idBefore: "old", artBefore: "/api/media_player_proxy/m?token=AAA&cache=1" };
+  // 20 s later still the old station, token rotated – still pending, not finished
+  const rotated = { state: "playing", attributes: { media_content_id: "old", entity_picture: "/api/media_player_proxy/m?token=BBB&cache=1" } };
+  assert.equal(pressedPreset(pressed, "m", old, 8000), 0);
+  assert.equal(pressedPreset(pressed, "m", rotated, 20000), 0);
+  assert.equal(pressed.contentId, undefined, "rotating token is no new picture");
+  // 45 s: the new station arrives – the press is kept and marked as started
+  const fresh = { state: "playing", attributes: { media_content_id: "new", entity_picture: "/api/media_player_proxy/m?token=BBB&cache=2" } };
+  assert.equal(pressedPreset(pressed, "m", fresh, 45000), 0);
+  assert.equal(pressed.started, true);
+  assert.equal(pressed.contentId, "new");
+});
+
+test("artKey ignores the access token", () => {
+  assert.equal(artKey("/api/p/m?token=A&cache=1"), "/api/p/m?cache=1");
+  assert.equal(artKey("/api/p/m?cache=1&token=A"), "/api/p/m?cache=1");
+  assert.equal(artKey("/api/p/m?token=A"), "/api/p/m");
+  assert.equal(artKey("https://cdn/x.jpg"), "https://cdn/x.jpg");
+  assert.equal(artKey(null), null);
 });
 
 test("playlists: config, content type, editor mode", () => {
