@@ -361,7 +361,7 @@ Tasten, die der Player nicht unterstützt (`supported_features`), werden ausgebl
 | Quelle / Favorit wählen | `source: Ö1` | `media_player.select_source` |
 | Beliebige Aktion | `action: script.morgen_radio`, optional `data:` (`entity_id: current` = der gewählte Player) | jeder Dienst |
 
-Jede Taste kann ein **Bild** bekommen (Senderlogo, Playlist-Cover): `image: /local/logos/oe3.png` (Datei im Ordner `www`), eine Internet-Adresse oder im Editor über „Bild hochladen“. Ohne Bild übernimmt die Karte automatisch das Senderbild, sobald der Sender einmal gelaufen ist (`preset_auto_image`).
+Jede Taste kann ein **Bild** bekommen (Senderlogo, Playlist-Cover): `image: /local/logos/oe3.png` (Datei im Ordner `www`), eine Internet-Adresse oder im Editor über „Bild hochladen“. Ohne Bild übernimmt die Karte automatisch das Senderbild, sobald der Sender einmal gelaufen ist (`preset_auto_image`). Bereits gespeicherte Logos lassen sich im Editor bei jeder Taste unter **„Gespeichertes Logo wählen“** auswählen (YAML: `logo: <Schlüssel>`) – praktisch für einen neuen Player. Hat ein anderer Player denselben Sender (gleicher Inhalt oder Name) schon gelernt, wird dessen Logo auch ohne Auswahl automatisch verwendet.
 
 Ohne `media_content_type` wählt die Karte den passenden Typ nach der Integration des Players:
 

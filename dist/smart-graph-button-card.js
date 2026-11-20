@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.20.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.21.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -5234,6 +5234,9 @@ function normalizePreset(p, i, errors) {
   if (out.image !== undefined && out.image !== null && out.image !== "") {
     if (typeof out.image !== "string" || /["\\\n<>]/.test(out.image)) errors.push(`presets[${i}].image muss eine Bildadresse sein (z. B. /local/logos/oe3.png).`);
   } else delete out.image;
+  if (out.logo !== undefined && out.logo !== null && out.logo !== "") {
+    if (typeof out.logo !== "string") errors.push(`presets[${i}].logo muss der Name eines gespeicherten Logos sein.`);
+  } else delete out.logo;
   return out;
 }
 
@@ -5469,6 +5472,64 @@ function writeLocalLogo(key, rec) {
 function getLogo(key) {
   const rec = (logoStore.map && logoStore.map[key]) || readLocalLogo(key);
   return rec && !rec.deleted && rec.img ? rec : null;
+}
+
+/** Parts of a stored picture key: sgmc-img2:<player>:<content id/source/action>:<name>. */
+function parseLogoKey(key) {
+  const m = /^sgmc-img2:([^:]*):(.*):([^:]*)$/.exec(String(key || ""));
+  return m ? { player: m[1], id: m[2], name: m[3] } : null;
+}
+
+/**
+ * Stored picture for a preset of another player: same media_content_id /
+ * source / action first, otherwise the same name. Newest wins. Returns the key.
+ */
+function matchStoredLogo(map, preset) {
+  if (!isPlainObject(map) || !preset) return null;
+  const id = String(preset.media_content_id ?? preset.source ?? preset.action ?? "").toLowerCase();
+  const name = String(preset.name ?? "").toLowerCase();
+  let best = null;
+  let bestRank = 0;
+  for (const [k, rec] of Object.entries(map)) {
+    if (!rec || rec.deleted || !rec.img) continue;
+    const parts = parseLogoKey(k);
+    if (!parts) continue;
+    const rank = id && parts.id.toLowerCase() === id ? 2 : name && parts.name.toLowerCase() === name ? 1 : 0;
+    if (!rank) continue;
+    if (rank > bestRank || (rank === bestRank && (Number(rec.t) || 0) > (Number(map[best].t) || 0))) {
+      best = k;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+
+/** All stored pictures (browser + Home Assistant), one entry per distinct picture. */
+function storedLogoList(map) {
+  const seen = new Set();
+  const out = [];
+  const entries = Object.entries(map || {}).filter(([k, rec]) => rec && !rec.deleted && rec.img && parseLogoKey(k));
+  entries.sort((a, b) => (Number(b[1].t) || 0) - (Number(a[1].t) || 0));
+  for (const [key, rec] of entries) {
+    if (seen.has(rec.img)) continue;
+    seen.add(rec.img);
+    const parts = parseLogoKey(key);
+    out.push({ key, img: rec.img, name: parts.name || parts.id, player: parts.player });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function allLogos() {
+  const map = { ...(logoStore.map || {}) };
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("sgmc-img2:") && !map[k]) map[k] = readLocalLogo(k);
+    }
+  } catch (_err) {
+    /* storage blocked */
+  }
+  return map;
 }
 
 function repaintLogoCards() {
@@ -5930,9 +5991,16 @@ class SmartGraphMediaCard extends Base {
     const p = c.presets[i];
     if (!p || c.preset_style === "text") return { src: null };
     if (p.image) return { src: typeof this._hass?.hassUrl === "function" && p.image.startsWith("/") && !p.image.startsWith("//") ? this._hass.hassUrl(p.image) : p.image };
+    if (p.logo) {
+      const chosen = getLogo(p.logo);
+      if (chosen) return { src: chosen.img };
+    }
     if (!c.preset_auto_image) return { src: null };
     const rec = getLogo(presetImageKey(c.players, p));
-    return { src: rec?.img || null, auto: true };
+    if (rec) return { src: rec.img, auto: true };
+    // same station already learned with another player
+    const other = matchStoredLogo(allLogos(), p);
+    return { src: other ? getLogo(other)?.img || null : null };
   }
 
   _paintPresetImages() {
@@ -5967,7 +6035,7 @@ class SmartGraphMediaCard extends Base {
   _learnPresetImage(i, url, rawUrl, replace) {
     const c = this._config;
     const p = c.presets[i];
-    if (!p || p.image || !c.preset_auto_image || c.preset_style === "text") return;
+    if (!p || p.image || (p.logo && getLogo(p.logo)) || !c.preset_auto_image || c.preset_style === "text") return;
     const key = presetImageKey(c.players, p);
     const src = artKey(rawUrl || url);
     const rec = getLogo(key);
@@ -6679,6 +6747,7 @@ function presetToForm(preset) {
     if (String(p.image).startsWith("/api/image/serve/")) f.image_upload = p.image;
   }
   if (p.match) f.match = p.match;
+  if (p.logo) f.logo = p.logo;
   if (kind === "action") {
     f.action = action;
     if (isPlainObject(p.data)) f.data = p.data;
@@ -6702,6 +6771,7 @@ function presetFromForm(f) {
   // upload removed → also drop its address
   if (!d.image_upload && d._image_upload_before && image === d._image_upload_before) image = "";
   if (typeof image === "string" && image.trim()) out.image = image.trim();
+  if (typeof d.logo === "string" && d.logo) out.logo = d.logo;
   if (d.kind === "action") {
     out.action = d.action || "";
     if (isPlainObject(d.data) && Object.keys(d.data).length) out.data = d.data;
@@ -6813,6 +6883,20 @@ const EDITOR_STYLES = `
 .sgmc-ed-presets { margin-top: 20px; }
 .sgmc-ed-title { font-size: 15px; font-weight: 500; margin: 0 0 4px; }
 .sgmc-ed-hint { font-size: 12px; color: var(--secondary-text-color); margin: 0 0 10px; }
+.sgmc-ed-logos { margin-top: 8px; font-size: 13px; }
+.sgmc-ed-logos.hidden { display: none; }
+.sgmc-ed-logos summary { cursor: pointer; display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--primary-color, #03a9f4); font-weight: 500; }
+.sgmc-ed-logos summary img { width: 28px; height: 28px; object-fit: contain; border-radius: 5px; background: color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
+.sgmc-ed-logos .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; padding: 8px 0 2px; }
+.sgmc-ed-logos .grid button {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; min-width: 0;
+  border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3)); border-radius: 8px; background: transparent;
+  color: var(--primary-text-color); font: inherit; font-size: 11px; cursor: pointer;
+}
+.sgmc-ed-logos .grid button.selected { border-color: var(--primary-color, #03a9f4); box-shadow: 0 0 0 1px var(--primary-color, #03a9f4); }
+.sgmc-ed-logos .grid button.none { justify-content: center; min-height: 64px; }
+.sgmc-ed-logos .grid img { width: 48px; height: 48px; object-fit: contain; border-radius: 6px; background: color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
+.sgmc-ed-logos .grid span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sgmc-ed-item { border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3)); border-radius: 12px; padding: 4px 12px 12px; margin-bottom: 10px; }
 .sgmc-ed-head { display: flex; align-items: center; gap: 4px; min-height: 40px; }
 .sgmc-ed-head .label { flex: 1 1 auto; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -6838,8 +6922,22 @@ class SmartGraphMediaCardEditor extends Base {
     this._render();
   }
 
+  connectedCallback() {
+    logoStore.cards.add(this);
+  }
+
+  disconnectedCallback() {
+    logoStore.cards.delete(this);
+  }
+
+  /** Called when stored pictures change: refresh the pickers. */
+  _paintPresetImages() {
+    for (const item of [...(this._listItems?.presets || []), ...(this._listItems?.playlists || [])]) item.refreshLogos?.();
+  }
+
   set hass(hass) {
     this._hass = hass;
+    if (!logoStore.started) startLogoSync(hass);
     if (this._form) this._form.hass = hass;
     for (const item of [...(this._listItems?.presets || []), ...(this._listItems?.playlists || [])]) item.form.hass = hass;
   }
@@ -7084,9 +7182,66 @@ class SmartGraphMediaCardEditor extends Base {
         if (kindChanged) form.schema = presetSchema(value.kind, sources);
         form.data = presetToForm(next);
       });
-      wrap.append(head, form);
+      const picker = document.createElement("details");
+      picker.className = "sgmc-ed-logos";
+      const refreshLogos = () => {
+        const logos = storedLogoList(allLogos());
+        const current = this._list(key)[i];
+        const chosen = isPlainObject(current) ? current.logo : undefined;
+        picker.classList.toggle("hidden", !logos.length && !chosen);
+        const summary = document.createElement("summary");
+        const chosenEntry = chosen ? logos.find((l) => l.key === chosen) || (getLogo(chosen) ? { img: getLogo(chosen).img } : null) : null;
+        if (chosenEntry) {
+          const im = document.createElement("img");
+          im.src = chosenEntry.img;
+          im.alt = "";
+          summary.append(im);
+        }
+        summary.append(document.createTextNode(chosen ? "Gespeichertes Logo (gewählt)" : `Gespeichertes Logo wählen (${logos.length})`));
+        const grid = document.createElement("div");
+        grid.className = "grid";
+        const pick = (logoKey) => {
+          const list = [...this._list(key)];
+          const entry = isPlainObject(list[i]) ? { ...list[i] } : presetFromForm(presetToForm(list[i]));
+          if (logoKey) {
+            entry.logo = logoKey;
+            delete entry.image; // the chosen logo replaces an image address
+          } else delete entry.logo;
+          list[i] = entry;
+          this._setList(key, list, false);
+          form.data = presetToForm(entry);
+          refreshLogos();
+        };
+        const none = document.createElement("button");
+        none.type = "button";
+        none.className = `none${chosen ? "" : " selected"}`;
+        none.textContent = "Automatisch";
+        none.title = "Kein gespeichertes Logo – Bild automatisch übernehmen";
+        none.addEventListener("click", () => pick(null));
+        grid.append(none);
+        for (const l of logos) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = l.key === chosen ? "selected" : "";
+          b.title = `${l.name} (${l.player})`;
+          const im = document.createElement("img");
+          im.src = l.img;
+          im.alt = l.name;
+          im.loading = "lazy";
+          const cap = document.createElement("span");
+          cap.textContent = l.name;
+          b.append(im, cap);
+          b.addEventListener("click", () => pick(l.key));
+          grid.append(b);
+        }
+        const open = picker.open;
+        picker.replaceChildren(summary, grid);
+        picker.open = open;
+      };
+      refreshLogos();
+      wrap.append(head, form, picker);
       box.append(wrap);
-      return { wrap, form };
+      return { wrap, form, refreshLogos };
     });
     const add = document.createElement("button");
     add.type = "button";
@@ -7113,7 +7268,7 @@ function registerMediaCard() {
     documentationURL: "https://github.com/rest2178/smart-graph-button-card",
   });
 }
-return { MEDIA_TAG, MEDIA_EDITOR_TAG, FEATURES, supports, MediaConfigError, ARTWORK_MODES, PRESET_STYLES, INFO_STYLES, fixText, presetImageKey, validateMediaConfig, artworkUrl, defaultContentType, presetCall, activePreset, artKey, pressedPreset, currentPreset, mergeLogos, playlistItems, playlistFolders, findPlaylists, volumeIcon, SmartGraphMediaCard, presetToForm, presetFromForm, presetSchema, mediaToForm, mediaFromForm, SmartGraphMediaCardEditor, registerMediaCard };
+return { MEDIA_TAG, MEDIA_EDITOR_TAG, FEATURES, supports, MediaConfigError, ARTWORK_MODES, PRESET_STYLES, INFO_STYLES, fixText, presetImageKey, validateMediaConfig, artworkUrl, defaultContentType, presetCall, activePreset, artKey, pressedPreset, currentPreset, mergeLogos, parseLogoKey, matchStoredLogo, storedLogoList, playlistItems, playlistFolders, findPlaylists, volumeIcon, SmartGraphMediaCard, presetToForm, presetFromForm, presetSchema, mediaToForm, mediaFromForm, SmartGraphMediaCardEditor, registerMediaCard };
 })();
 
 // ---- src/weather-badge.js
@@ -8034,7 +8189,7 @@ const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = 
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.20.0";
+const CARD_VERSION = "1.21.0";
 
 let instanceCounter = 0;
 

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, artKey, currentPreset, mergeLogos, fixText, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
+import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, artKey, currentPreset, mergeLogos, fixText, parseLogoKey, matchStoredLogo, storedLogoList, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
 
 test("config: players, presets, defaults, errors", () => {
   const c = validateMediaConfig({ entity: "media_player.a", entities: ["media_player.b", { entity: "media_player.a" }, { entity: "media_player.c", name: "Küche" }], presets: ["Ö3", { name: "Ö1", source: "Ö1" }] });
@@ -273,4 +273,31 @@ test("info style option", () => {
   assert.equal(f.info_style, "scroll");
   assert.equal(mediaFromForm({ entity: "media_player.a" }, f).info_style, undefined);
   assert.equal(mediaFromForm({ entity: "media_player.a" }, { ...f, info_style: "single" }).info_style, "single");
+});
+
+test("stored logos: parse, match for another player, list for the picker", () => {
+  assert.deepEqual(parseLogoKey("sgmc-img2:media_player.a:spotify:playlist:1:Rock"), { player: "media_player.a", id: "spotify:playlist:1", name: "Rock" });
+  assert.equal(parseLogoKey("other"), null);
+  const map = {
+    "sgmc-img2:media_player.kueche:Hitradio Ö3:Ö3": { img: "data:oe3", t: 5 },
+    "sgmc-img2:media_player.bad:Hitradio Ö3:Ö3": { img: "data:oe3new", t: 9 },
+    "sgmc-img2:media_player.kueche:Radio Steiermark:Steiermark": { img: "data:st", t: 3 },
+    "sgmc-img2:media_player.kueche:x:Gelöscht": { deleted: true, t: 7 },
+    "sgmc-img2:media_player.bad:Hitradio Ö3:Ö3 Kopie": { img: "data:oe3", t: 1 },
+  };
+  assert.equal(matchStoredLogo(map, { name: "Ö3", media_content_id: "Hitradio Ö3" }), "sgmc-img2:media_player.bad:Hitradio Ö3:Ö3", "same station, newest");
+  assert.equal(matchStoredLogo(map, { name: "steiermark", media_content_id: "other id" }), "sgmc-img2:media_player.kueche:Radio Steiermark:Steiermark", "same name");
+  assert.equal(matchStoredLogo(map, { name: "Gelöscht", media_content_id: "x" }), null);
+  const list = storedLogoList(map);
+  assert.deepEqual(list.map((l) => l.img), ["data:oe3new", "data:oe3", "data:st"], "one entry per picture, by name");
+  assert.equal(list[2].player, "media_player.kueche");
+});
+
+test("preset logo: config and editor round trip", () => {
+  const c = validateMediaConfig({ entity: "media_player.a", presets: [{ name: "Ö3", media_content_id: "x", logo: "sgmc-img2:media_player.b:x:Ö3" }] });
+  assert.equal(c.presets[0].logo, "sgmc-img2:media_player.b:x:Ö3");
+  assert.throws(() => validateMediaConfig({ entity: "media_player.a", presets: [{ name: "Ö3", media_content_id: "x", logo: 5 }] }));
+  const f = presetToForm({ name: "Ö3", media_content_id: "x", logo: "k" });
+  assert.equal(presetFromForm(f).logo, "k");
+  assert.equal(presetFromForm({ ...f, logo: undefined }).logo, undefined);
 });
