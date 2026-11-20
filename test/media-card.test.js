@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, artKey, currentPreset, mergeLogos, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
+import { validateMediaConfig, defaultContentType, presetCall, activePreset, volumeIcon, supports, FEATURES, mediaToForm, mediaFromForm, artworkUrl, presetToForm, presetFromForm, presetSchema, presetImageKey, pressedPreset, artKey, currentPreset, mergeLogos, fixText, findPlaylists, playlistItems, playlistFolders } from "../src/media-card.js";
 
 test("config: players, presets, defaults, errors", () => {
   const c = validateMediaConfig({ entity: "media_player.a", entities: ["media_player.b", { entity: "media_player.a" }, { entity: "media_player.c", name: "Küche" }], presets: ["Ö3", { name: "Ö1", source: "Ö1" }] });
@@ -252,4 +252,25 @@ test("logo maps merge by time, deletions stay deleted", () => {
   assert.equal(m.b.deleted, true);
   assert.equal(m.c.img, "data:c");
   assert.equal(m.bad, undefined);
+});
+
+test("fixText repairs umlauts from integrations", () => {
+  assert.equal(fixText("GrÃ¶nemeyer â€“ MÃ¤nner"), "Grönemeyer – Männer");
+  assert.equal(fixText("Gr&ouml;nemeyer &amp; Co"), "Grönemeyer & Co");
+  assert.equal(fixText("&#246;&#xFC;"), "öü");
+  assert.equal(fixText("Grönemeyer"), "Grönemeyer");
+  assert.equal(fixText("Ã la carte"), "Ã la carte");
+  assert.equal(fixText("AT&T; R&B"), "AT&T; R&B");
+  assert.equal(fixText(undefined), undefined);
+  assert.equal(activePreset([{ name: "Ö3", media_content_id: "x" }], { state: "playing", attributes: { media_title: "Hitradio Ã–3" } }), 0);
+});
+
+test("info style option", () => {
+  assert.equal(validateMediaConfig({ entity: "media_player.a" }).info_style, "scroll");
+  assert.equal(validateMediaConfig({ entity: "media_player.a", info_style: "two_lines" }).info_style, "two_lines");
+  assert.throws(() => validateMediaConfig({ entity: "media_player.a", info_style: "x" }));
+  const f = mediaToForm({ entity: "media_player.a" });
+  assert.equal(f.info_style, "scroll");
+  assert.equal(mediaFromForm({ entity: "media_player.a" }, f).info_style, undefined);
+  assert.equal(mediaFromForm({ entity: "media_player.a" }, { ...f, info_style: "single" }).info_style, "single");
 });

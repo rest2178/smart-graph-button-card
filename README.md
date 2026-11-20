@@ -382,6 +382,7 @@ Ohne `media_content_type` wählt die Karte den passenden Typ nach der Integratio
 | `preset_columns` | bis zu 3 | Spalten der Sender-Tasten (1–6) |
 | `show_power` / `show_volume` / `show_controls` | `true` | Ein/Aus, Lautstärke, Zurück/Wiedergabe/Weiter |
 | `show_media_info` | `true` | Titel und Interpret (bzw. Zustand) unter dem Namen |
+| `info_style` | `scroll` | Anzeige von Titel und Interpret: `scroll` (eine Zeile, Laufschrift wenn zu lang), `two_lines` (Titel und Interpret in zwei Zeilen), `single` (eine Zeile, abgeschnitten). Falsch kodierte Umlaute einiger Integrationen (z. B. „GrÃ¶nemeyer“, „Gr&ouml;nemeyer“) werden automatisch korrigiert |
 | `show_source_list` | `true` | Quellen des Players im Menü ▾ |
 | `preset_style` | `logo` | Aussehen der Sender-Tasten: `logo` (kleines Bild links neben dem Namen), `tile` (Bild füllt die Taste, Name klein darunter), `image` (nur das Bild ohne Namen darunter – solange kein Bild da ist, steht der Name in der Kachel), `text` (nur Name). Tasten ohne Bild zeigen nur den Namen (bei `tile`/`image` groß in einer farbigen Fläche) |
 | `preset_show_name` | `true` | Bei `tile`: Namen unter dem Bild zeigen |

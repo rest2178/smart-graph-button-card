@@ -1,4 +1,4 @@
-/*! Smart Graph Button Card v1.19.0 | MIT License | no external dependencies */
+/*! Smart Graph Button Card v1.20.0 | MIT License | no external dependencies */
 
 // ---- src/styles.js
 const __m_styles_js = (() => {
@@ -5165,6 +5165,46 @@ const ARTWORK_MODES = ["thumbnail", "background", "both", "none"];
  */
 const PRESET_STYLES = ["logo", "tile", "image", "text"];
 
+/** Station info: one line (cut off), scrolling when too long, or title and artist in two lines. */
+const INFO_STYLES = ["scroll", "two_lines", "single"];
+
+const NAMED_ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0", auml: "ä", ouml: "ö", uuml: "ü", Auml: "Ä", Ouml: "Ö", Uuml: "Ü", szlig: "ß", eacute: "é", egrave: "è", aacute: "á", agrave: "à", ccedil: "ç", ntilde: "ñ", oslash: "ø", aring: "å", hellip: "…", ndash: "–", mdash: "—", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“", bdquo: "„", euro: "€" };
+// Windows-1252 characters 0x80–0x9F (for text that was decoded with the wrong code page)
+const CP1252 = { 0x20ac: 0x80, 0x201a: 0x82, 0x0192: 0x83, 0x201e: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x02c6: 0x88, 0x2030: 0x89, 0x0160: 0x8a, 0x2039: 0x8b, 0x0152: 0x8c, 0x017d: 0x8e, 0x2018: 0x91, 0x2019: 0x92, 0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02dc: 0x98, 0x2122: 0x99, 0x0161: 0x9a, 0x203a: 0x9b, 0x0153: 0x9c, 0x017e: 0x9e, 0x0178: 0x9f };
+
+/**
+ * Repair title/artist texts as some integrations deliver them: HTML entities
+ * ("Gr&uuml;n", "&#246;") and UTF-8 read as Latin-1 ("GrÃ¼n" → "Grün").
+ */
+function fixText(value) {
+  if (value === undefined || value === null) return value;
+  let t = String(value);
+  if (t.includes("&")) {
+    t = t.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+      if (e[0] === "#") {
+        const code = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+        return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : m;
+      }
+      return NAMED_ENTITIES[e] ?? m;
+    });
+  }
+  if (/[ÂÃÅÆâ][\u0080-\u00bf\u0152-\u2122]/.test(t) && typeof TextDecoder === "function") {
+    const bytes = [];
+    for (const ch of t) {
+      const c = ch.codePointAt(0);
+      if (c < 0x100) bytes.push(c);
+      else if (CP1252[c] !== undefined) bytes.push(CP1252[c]);
+      else return t; // not mis-decoded text
+    }
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(bytes));
+    } catch (_err) {
+      return t;
+    }
+  }
+  return t;
+}
+
 /** Key under which an automatically learned preset picture is stored. */
 function presetImageKey(players, preset) {
   return `sgmc-img2:${players[0] || ""}:${preset.media_content_id ?? preset.source ?? preset.action ?? ""}:${preset.name}`;
@@ -5230,6 +5270,8 @@ function validateMediaConfig(raw) {
   if (!PRESET_STYLES.includes(presetStyle)) errors.push(`preset_style „${raw.preset_style}“ ist ungültig. Erlaubt: ${PRESET_STYLES.join(", ")}.`);
   const artwork = raw.artwork === undefined ? "thumbnail" : raw.artwork === false ? "none" : raw.artwork === true ? "both" : raw.artwork;
   if (!ARTWORK_MODES.includes(artwork)) errors.push(`artwork „${raw.artwork}“ ist ungültig. Erlaubt: ${ARTWORK_MODES.join(", ")}.`);
+  const infoStyle = raw.info_style === undefined ? "scroll" : raw.info_style;
+  if (!INFO_STYLES.includes(infoStyle)) errors.push(`info_style „${raw.info_style}“ ist ungültig. Erlaubt: ${INFO_STYLES.join(", ")}.`);
   if (errors.length) throw new MediaConfigError(errors.join("\n"));
   if (columns === null) columns = Math.max(1, Math.min(3, presets.length || 1));
   const flag = (k) => raw[k] !== false;
@@ -5243,6 +5285,7 @@ function validateMediaConfig(raw) {
     show_volume: flag("show_volume"),
     show_controls: flag("show_controls"),
     show_media_info: flag("show_media_info"),
+    info_style: infoStyle,
     show_source_list: flag("show_source_list"),
     artwork,
     preset_style: presetStyle,
@@ -5327,7 +5370,7 @@ function activePreset(presets, stateObj) {
   const a = stateObj.attributes || {};
   const hay = [a.media_title, a.media_channel, a.media_artist, a.media_album_name, a.media_playlist, a.source, a.media_content_id]
     .filter((v) => v !== undefined && v !== null && v !== "")
-    .map((v) => String(v).toLowerCase());
+    .map((v) => fixText(v).toLowerCase());
   if (!hay.length) return -1;
   return presets.findIndex((p) => {
     const keys = [p.match, p.source, p.media_content_id, p.name].filter(Boolean).map((v) => String(v).toLowerCase());
@@ -5609,6 +5652,16 @@ ha-card.sgmc.has-art button.preset:not(.active) { background: color-mix(in srgb,
 .name, .info { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .name { font-size: 16px; font-weight: 500; line-height: 1.25; }
 .info { font-size: 12px; color: var(--secondary-text-color); line-height: 1.3; }
+.info-copy { display: none; }
+.info.style-scroll.marquee { text-overflow: clip; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6px, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 6px, #000 calc(100% - 14px), transparent); }
+.info.style-scroll.marquee .info-track { display: inline-flex; gap: 40px; animation: sgmc-marquee var(--sgmc-marquee, 10s) linear 1.5s infinite; }
+.info.style-scroll.marquee .info-copy { display: inline; }
+@keyframes sgmc-marquee { from { transform: translateX(0); } to { transform: translateX(calc(-1 * var(--sgmc-shift, 50%))); } }
+@media (prefers-reduced-motion: reduce) {
+  .info.style-scroll.marquee .info-track { animation: none; }
+  .info.style-scroll.marquee .info-copy { display: none; }
+  .info.style-scroll.marquee { text-overflow: ellipsis; -webkit-mask-image: none; mask-image: none; }
+}
 .info.hidden, .hidden { display: none !important; }
 button.ic {
   flex: none;
@@ -5868,6 +5921,8 @@ class SmartGraphMediaCard extends Base {
     logoStore.cards.delete(this);
     if (this._outside) document.removeEventListener("click", this._outside, true);
     clearTimeout(this._volTimer);
+    if (this._infoObserver) this._infoObserver.disconnect();
+    this._infoObserver = null;
   }
 
   _presetImage(i) {
@@ -6016,8 +6071,14 @@ class SmartGraphMediaCard extends Base {
     const artBg = el("div", "art-bg", { "aria-hidden": "true" });
     const titles = el("div", "titles");
     const name = el("div", "name");
-    const info = el("div", `info${c.show_media_info ? "" : " hidden"}`);
-    titles.append(name, info);
+    const info = el("div", `info style-${c.info_style}${c.show_media_info ? "" : " hidden"}`);
+    const infoTrack = el("span", "info-track");
+    const infoText = el("span", "info-text");
+    const infoCopy = el("span", "info-text info-copy", { "aria-hidden": "true" });
+    infoTrack.append(infoText, infoCopy);
+    const info2 = el("div", "info info2 hidden");
+    info.append(infoTrack);
+    titles.append(name, info, info2);
     const optBtn = iconButton(`opt-btn${c.show_options_menu ? "" : " hidden"}`, "mdi:dots-vertical", "Optionen");
     optBtn.setAttribute("aria-haspopup", "true");
     optBtn.setAttribute("aria-expanded", "false");
@@ -6134,7 +6195,7 @@ class SmartGraphMediaCard extends Base {
       this._call("media_player", supports(s, FEATURES.PAUSE) && supports(s, FEATURES.PLAY) ? "media_play_pause" : service, { entity_id: this._current });
     });
 
-    this._els = { card, optBtn, omenu, pIcon, thumb, artBg, name, info, menuBtn, power, menu, controls, mute, slider, prev, play, next, presets, presetButtons };
+    this._els = { infoText, infoCopy, info2, card, optBtn, omenu, pIcon, thumb, artBg, name, info, menuBtn, power, menu, controls, mute, slider, prev, play, next, presets, presetButtons };
   }
 
   _stateObj() {
@@ -6150,6 +6211,26 @@ class SmartGraphMediaCard extends Base {
     this._volSentAt = Date.now();
     this._pendingLevel = level;
     this._call("media_player", "volume_set", { entity_id: this._current, volume_level: level });
+  }
+
+  /** Scrolling station info: only when the text does not fit. */
+  _fitInfo() {
+    const els = this._els;
+    if (!els || this._config.info_style !== "scroll") return;
+    if (!this._infoObserver && typeof ResizeObserver === "function") {
+      this._infoObserver = new ResizeObserver(() => this._fitInfo());
+      this._infoObserver.observe(els.info);
+    }
+    requestAnimationFrame(() => {
+      const box = els.info.clientWidth;
+      const w = Math.ceil(els.infoText.getBoundingClientRect().width);
+      const run = box > 0 && w > box + 1;
+      els.info.classList.toggle("marquee", run);
+      if (run) {
+        els.info.style.setProperty("--sgmc-shift", `${w + 40}px`);
+        els.info.style.setProperty("--sgmc-marquee", `${Math.max(6, (w + 40) / 30).toFixed(1)}s`);
+      }
+    });
   }
 
   _paintSlider(v) {
@@ -6438,10 +6519,22 @@ class SmartGraphMediaCard extends Base {
     if (els.name.textContent !== name) els.name.textContent = name;
     els.name.title = name;
     if (c.show_media_info) {
-      const playingInfo = ["playing", "paused", "buffering"].includes(state) ? [a.media_title, a.media_artist || a.media_channel || a.app_name].filter(Boolean).join(" · ") : "";
-      const text = playingInfo || (this._hass.formatEntityState && s ? this._hass.formatEntityState(s) : STATE_TEXT[state] || state);
-      if (els.info.textContent !== text) els.info.textContent = text;
-      els.info.classList.toggle("hidden", !text);
+      const playing = ["playing", "paused", "buffering"].includes(state);
+      const title = playing ? fixText(a.media_title) : "";
+      const artist = playing ? fixText(a.media_artist || a.media_channel || a.app_name) : "";
+      const stateText = this._hass.formatEntityState && s ? this._hass.formatEntityState(s) : STATE_TEXT[state] || state;
+      const two = c.info_style === "two_lines" && title && artist;
+      const line1 = two ? title : [title, artist].filter(Boolean).join(" · ") || stateText;
+      const line2 = two ? artist : "";
+      if (els.infoText.textContent !== line1) {
+        els.infoText.textContent = line1;
+        els.infoCopy.textContent = line1;
+        els.info.title = [title, artist].filter(Boolean).join(" · ");
+        this._fitInfo();
+      }
+      if (els.info2.textContent !== line2) els.info2.textContent = line2;
+      els.info.classList.toggle("hidden", !line1);
+      els.info2.classList.toggle("hidden", !line2);
     }
     els.menuBtn.classList.toggle("hidden", this._menuItems().length === 0);
     const canPower = supports(s, FEATURES.TURN_ON) || supports(s, FEATURES.TURN_OFF);
@@ -6532,6 +6625,7 @@ const LABELS = {
   show_volume: "Lautstärke",
   show_controls: "Zurück / Wiedergabe / Weiter",
   show_media_info: "Titel und Interpret anzeigen",
+  info_style: "Titel und Interpret",
   show_source_list: "Quellen im Menü ▾",
   artwork: "Bild des Senders / Covers",
   preset_columns: "Spalten der Sender-Tasten",
@@ -6669,6 +6763,7 @@ function mediaToForm(config) {
     show_source_list: c.show_source_list !== false,
     preset_columns: c.preset_columns,
     preset_style: c.preset_style || "logo",
+    info_style: c.info_style || "scroll",
     show_options_menu: c.show_options_menu !== false,
     playlist_mode: c.playlists === false || c.playlists === null ? "none" : Array.isArray(c.playlists) ? "list" : "auto",
     preset_show_name: c.preset_show_name !== false,
@@ -6701,6 +6796,8 @@ function mediaFromForm(config, form) {
   if (d.playlist_mode === "none") out.playlists = false;
   else if (d.playlist_mode === "list") out.playlists = Array.isArray(out.playlists) ? out.playlists : [];
   else if (d.playlist_mode === "auto") delete out.playlists;
+  if (d.info_style && d.info_style !== "scroll") out.info_style = d.info_style;
+  else delete out.info_style;
   if (d.preset_style && d.preset_style !== "logo") out.preset_style = d.preset_style;
   else delete out.preset_style;
   for (const k of ["preset_show_name", "preset_auto_image"]) {
@@ -6822,6 +6919,23 @@ class SmartGraphMediaCardEditor extends Base {
           { name: "show_source_list", selector: { boolean: {} } },
         ],
       },
+      ...(this._config?.show_media_info === false
+        ? []
+        : [
+            {
+              name: "info_style",
+              selector: {
+                select: {
+                  mode: "dropdown",
+                  options: [
+                    { value: "scroll", label: "Eine Zeile, Laufschrift wenn zu lang" },
+                    { value: "two_lines", label: "Zweizeilig (Titel / Interpret)" },
+                    { value: "single", label: "Eine Zeile, abgeschnitten" },
+                  ],
+                },
+              },
+            },
+          ]),
       {
         name: "artwork",
         selector: {
@@ -6999,7 +7113,7 @@ function registerMediaCard() {
     documentationURL: "https://github.com/rest2178/smart-graph-button-card",
   });
 }
-return { MEDIA_TAG, MEDIA_EDITOR_TAG, FEATURES, supports, MediaConfigError, ARTWORK_MODES, PRESET_STYLES, presetImageKey, validateMediaConfig, artworkUrl, defaultContentType, presetCall, activePreset, artKey, pressedPreset, currentPreset, mergeLogos, playlistItems, playlistFolders, findPlaylists, volumeIcon, SmartGraphMediaCard, presetToForm, presetFromForm, presetSchema, mediaToForm, mediaFromForm, SmartGraphMediaCardEditor, registerMediaCard };
+return { MEDIA_TAG, MEDIA_EDITOR_TAG, FEATURES, supports, MediaConfigError, ARTWORK_MODES, PRESET_STYLES, INFO_STYLES, fixText, presetImageKey, validateMediaConfig, artworkUrl, defaultContentType, presetCall, activePreset, artKey, pressedPreset, currentPreset, mergeLogos, playlistItems, playlistFolders, findPlaylists, volumeIcon, SmartGraphMediaCard, presetToForm, presetFromForm, presetSchema, mediaToForm, mediaFromForm, SmartGraphMediaCardEditor, registerMediaCard };
 })();
 
 // ---- src/weather-badge.js
@@ -7920,7 +8034,7 @@ const { parseCssColor, composite, ensureContrast, contrastTarget, rgbString } = 
 
 const CARD_TAG = "smart-graph-button-card";
 const INFO_CARD_TAG = "smart-graph-info-card";
-const CARD_VERSION = "1.19.0";
+const CARD_VERSION = "1.20.0";
 
 let instanceCounter = 0;
 
